@@ -2,7 +2,7 @@
 
 Integração custom para Home Assistant que planeia a carga noturna da bateria (inversores híbridos Deye) com base na previsão solar, no histórico de consumo e nas tarifas tri-horárias.
 
-> v0.1 — só leitura: calcula o plano e expõe sensores, ainda não controla o inversor.
+> v0.1 - só leitura: calcula o plano e expõe sensores, ainda não controla o inversor.
 
 ## Funcionalidades
 - Previsão de consumo a partir das estatísticas do sensor de carga (média ponderada 1–7, 7 e 14 dias)
