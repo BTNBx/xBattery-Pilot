@@ -1,0 +1,48 @@
+{
+  "config": {
+    "abort": {
+      "no_forecast": "Instala primeiro o Forecast.Solar, Solcast ou Open-Meteo Solar Forecast.",
+      "already_configured": "Já configurado."
+    },
+    "step": {
+      "user": {
+        "title": "xBattery Pilot",
+        "data": {
+          "soc_sensor": "Sensor SOC da bateria (%)",
+          "load_sensor": "Sensor de consumo da casa (W)",
+          "forecast_entry": "Previsão solar",
+          "pv_scaling": "Fator de correção solar",
+          "capacity_wh": "Capacidade da bateria",
+          "min_soc": "SOC mínimo",
+          "charge_start": "Início da janela de carga",
+          "charge_end": "Fim da janela de carga",
+          "charge_power_w": "Potência de carga pela rede",
+          "price_vazio": "Preço vazio",
+          "price_cheias": "Preço cheias",
+          "price_ponta": "Preço ponta"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "xBattery Pilot",
+        "data": {
+          "soc_sensor": "Sensor SOC da bateria (%)",
+          "load_sensor": "Sensor de consumo da casa (W)",
+          "forecast_entry": "Previsão solar",
+          "pv_scaling": "Fator de correção solar",
+          "capacity_wh": "Capacidade da bateria",
+          "min_soc": "SOC mínimo",
+          "charge_start": "Início da janela de carga",
+          "charge_end": "Fim da janela de carga",
+          "charge_power_w": "Potência de carga pela rede",
+          "price_vazio": "Preço vazio",
+          "price_cheias": "Preço cheias",
+          "price_ponta": "Preço ponta"
+        }
+      }
+    }
+  }
+}

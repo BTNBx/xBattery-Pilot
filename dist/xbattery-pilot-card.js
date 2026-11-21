@@ -1,0 +1,321 @@
+const BP_VERSION = "0.1.0";
+
+const BP_KEYS = [
+  "plano",
+  "soc_alvo",
+  "carga_pela_rede",
+  "custo_previsto",
+  "poupanca_prevista",
+  "solar_previsto",
+  "consumo_previsto",
+  "soc_no_inicio_da_carga",
+  "soc_minimo_previsto",
+  "solar_desperdicado",
+];
+
+const W = 600;
+const H = 220;
+const PL = 36;
+const PR = 36;
+const PT = 18;
+const PB = 30;
+
+class XBatteryPilotCard extends HTMLElement {
+  static getStubConfig() {
+    return { prefix: "sensor.xbattery_pilot_" };
+  }
+
+  setConfig(config) {
+    this._config = { prefix: "sensor.xbattery_pilot_", title: "xBattery Pilot", ...config };
+    this._sig = null;
+    if (!this.shadowRoot) this.attachShadow({ mode: "open" });
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    const sig = BP_KEYS.map((k) => {
+      const st = hass.states[this._e(k)];
+      return st ? `${st.state}@${st.last_updated}` : "-";
+    }).join("|");
+    if (sig === this._sig) return;
+    this._sig = sig;
+    this._render();
+  }
+
+  getCardSize() {
+    return 7;
+  }
+
+  getGridOptions() {
+    return { columns: 12, rows: 7, min_columns: 6 };
+  }
+
+  _e(k) {
+    return `${this._config.prefix}${k}`;
+  }
+
+  _v(k) {
+    const st = this._hass.states[this._e(k)];
+    if (!st || ["unknown", "unavailable"].includes(st.state)) return null;
+    return st.state;
+  }
+
+  _n(v, d = 1) {
+    if (v === null || v === undefined || isNaN(Number(v))) return "–";
+    return Number(v).toLocaleString("pt-PT", { minimumFractionDigits: d, maximumFractionDigits: d });
+  }
+
+  _esc(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  }
+
+  _time(iso) {
+    const tz = this._hass?.config?.time_zone;
+    return new Date(iso).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: tz });
+  }
+
+  _periods(rows) {
+    const prices = [...new Set(rows.map((r) => r.price))].sort((a, b) => a - b);
+    const lo = prices[0];
+    const hi = prices[prices.length - 1];
+    return rows.map((r) => (r.price === lo ? "vazio" : r.price === hi && prices.length > 2 ? "ponta" : "cheias"));
+  }
+
+  _chart(rows, ws, we) {
+    const n = rows.length;
+    const cw = W - PL - PR;
+    const ch = H - PT - PB;
+    const bw = cw / n;
+    const base = PT + ch;
+    const toW = (wh) => wh * 2;
+
+    let maxP = 500;
+    rows.forEach((r) => (maxP = Math.max(maxP, toW(r.pv), toW(r.load), toW(r.grid))));
+    maxP = Math.ceil(maxP / 500) * 500;
+
+    const x = (i) => PL + i * bw + bw / 2;
+    const yP = (w) => PT + (1 - w / maxP) * ch;
+    const yS = (s) => PT + (1 - s / 100) * ch;
+
+    const periods = this._periods(rows);
+    const tStart = new Date(ws).getTime();
+    const tEnd = new Date(we).getTime();
+
+    let svg = "";
+
+    let wi0 = -1;
+    let wi1 = -1;
+    rows.forEach((r, i) => {
+      const t = new Date(r.t).getTime();
+      if (t >= tStart && t < tEnd) {
+        if (wi0 < 0) wi0 = i;
+        wi1 = i;
+      }
+    });
+    if (wi0 >= 0) {
+      const wx = PL + wi0 * bw;
+      const ww = (wi1 - wi0 + 1) * bw;
+      svg += `<rect x="${wx}" y="${PT}" width="${ww}" height="${ch}" fill="var(--bp-soc)" opacity="0.10" rx="6"/>`;
+      svg += `<text x="${wx + ww / 2}" y="${PT - 5}" class="axis" text-anchor="middle" fill="var(--bp-soc)">carga</text>`;
+    }
+
+    [0, 0.5, 1].forEach((f) => {
+      const y = PT + (1 - f) * ch;
+      svg += `<line x1="${PL}" x2="${W - PR}" y1="${y}" y2="${y}" stroke="currentColor" opacity="0.08"/>`;
+      svg += `<text x="${PL - 6}" y="${y + 3}" class="axis" text-anchor="end">${this._n((maxP * f) / 1000, 1)}</text>`;
+      svg += `<text x="${W - PR + 6}" y="${y + 3}" class="axis">${Math.round(100 * f)}%</text>`;
+    });
+    svg += `<text x="${PL - 6}" y="${PT - 5}" class="axis" text-anchor="end">kW</text>`;
+    svg += `<text x="${W - PR + 6}" y="${PT - 5}" class="axis">SOC</text>`;
+
+    let pvPath = `M ${x(0)} ${base}`;
+    rows.forEach((r, i) => (pvPath += ` L ${x(i)} ${yP(toW(r.pv))}`));
+    pvPath += ` L ${x(n - 1)} ${base} Z`;
+    svg += `<path d="${pvPath}" fill="var(--bp-pv)" opacity="0.35" stroke="var(--bp-pv)" stroke-width="1.5"/>`;
+
+    rows.forEach((r, i) => {
+      if (r.grid > 0) {
+        const h = base - yP(toW(r.grid));
+        svg += `<rect x="${PL + i * bw + bw * 0.2}" y="${base - h}" width="${bw * 0.6}" height="${h}" rx="1.5" fill="var(--bp-grid)" opacity="0.85"/>`;
+      }
+    });
+
+    const loadPts = rows.map((r, i) => `${x(i)},${yP(toW(r.load))}`).join(" ");
+    svg += `<polyline points="${loadPts}" fill="none" stroke="var(--bp-load)" stroke-width="1.8" stroke-linejoin="round"/>`;
+
+    const socPts = rows.map((r, i) => `${x(i)},${yS(r.soc)}`).join(" ");
+    svg += `<polyline points="${socPts}" fill="none" stroke="var(--bp-soc)" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>`;
+
+    rows.forEach((r, i) => {
+      svg += `<rect x="${PL + i * bw}" y="${base + 4}" width="${bw + 0.5}" height="5" fill="var(--bp-${periods[i]})"/>`;
+      const hm = this._time(r.t);
+      const [hh, mm] = hm.split(":").map(Number);
+      if (mm === 0 && hh % 3 === 0) {
+        svg += `<text x="${PL + i * bw}" y="${H - 6}" class="axis" text-anchor="middle">${String(hh).padStart(2, "0")}h</text>`;
+      }
+    });
+
+    svg += `<line id="cursor" x1="0" x2="0" y1="${PT}" y2="${base}" stroke="currentColor" opacity="0" stroke-width="1"/>`;
+    svg += `<circle id="cursor-dot" r="4" cx="0" cy="0" fill="var(--bp-soc)" opacity="0"/>`;
+    svg += `<rect id="hit" x="${PL}" y="0" width="${cw}" height="${H}" fill="transparent"/>`;
+
+    this._geo = { n, bw, x, yS, periods };
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">${svg}</svg>`;
+  }
+
+  _legend() {
+    return `
+      <span><i class="dot" style="background:var(--bp-pv)"></i>Solar</span>
+      <span><i class="dot" style="background:var(--bp-load)"></i>Consumo</span>
+      <span><i class="dot" style="background:var(--bp-grid)"></i>Rede</span>
+      <span><i class="dot" style="background:var(--bp-soc)"></i>SOC</span>
+      <span class="per"><i class="bar" style="background:var(--bp-vazio)"></i>Vazio
+      <i class="bar" style="background:var(--bp-cheias)"></i>Cheias
+      <i class="bar" style="background:var(--bp-ponta)"></i>Ponta</span>`;
+  }
+
+  _select(i) {
+    const root = this.shadowRoot;
+    const info = root.querySelector(".info");
+    const cursor = root.getElementById("cursor");
+    const dot = root.getElementById("cursor-dot");
+    if (!info || !cursor) return;
+    if (i === null || !this._rows || i < 0 || i >= this._rows.length) {
+      cursor.setAttribute("opacity", "0");
+      dot.setAttribute("opacity", "0");
+      info.innerHTML = this._legend();
+      return;
+    }
+    const r = this._rows[i];
+    const g = this._geo;
+    const cx = g.x(i);
+    cursor.setAttribute("x1", cx);
+    cursor.setAttribute("x2", cx);
+    cursor.setAttribute("opacity", "0.35");
+    dot.setAttribute("cx", cx);
+    dot.setAttribute("cy", g.yS(r.soc));
+    dot.setAttribute("opacity", "1");
+    info.innerHTML = `
+      <b>${this._time(r.t)}</b>
+      <span><i class="dot" style="background:var(--bp-pv)"></i>${this._n((r.pv * 2) / 1000, 2)} kW</span>
+      <span><i class="dot" style="background:var(--bp-load)"></i>${this._n((r.load * 2) / 1000, 2)} kW</span>
+      <span><i class="dot" style="background:var(--bp-grid)"></i>${this._n((r.grid * 2) / 1000, 2)} kW</span>
+      <span><i class="dot" style="background:var(--bp-soc)"></i>${this._n(r.soc, 0)}%</span>
+      <span><i class="bar" style="background:var(--bp-${g.periods[i]})"></i>${g.periods[i]} · ${this._n(r.price, 4)} €</span>`;
+  }
+
+  _bind() {
+    const svg = this.shadowRoot.querySelector("svg");
+    if (!svg || !this._geo) return;
+    const pick = (ev) => {
+      const rect = svg.getBoundingClientRect();
+      const px = ((ev.clientX - rect.left) * W) / rect.width;
+      const i = Math.floor((px - PL) / this._geo.bw);
+      this._select(Math.max(0, Math.min(this._geo.n - 1, i)));
+    };
+    svg.addEventListener("pointermove", pick);
+    svg.addEventListener("pointerdown", pick);
+    svg.addEventListener("pointerleave", () => this._select(null));
+  }
+
+  _render() {
+    if (!this._hass || !this._config) return;
+    const planId = this._e("plano");
+    const plan = this._hass.states[planId];
+
+    const style = `
+      <style>
+        :host {
+          --bp-pv: #FFC93C;
+          --bp-load: #5AC8FA;
+          --bp-grid: #FF6B6B;
+          --bp-soc: #34C759;
+          --bp-vazio: #34C759;
+          --bp-cheias: #FF9F0A;
+          --bp-ponta: #FF453A;
+        }
+        ha-card { padding: 16px; overflow: hidden; }
+        .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+        .title { font-size: 11px; letter-spacing: .04em; font-weight: 700; opacity: .6; }
+        .decision { font-size: 24px; font-weight: 700; margin-top: 4px; line-height: 1.15; }
+        .sub { font-size: 13px; opacity: .6; margin-top: 2px; }
+        .save { text-align: right; white-space: nowrap; }
+        .save .v { font-size: 22px; font-weight: 700; color: var(--bp-soc); }
+        .save .l { font-size: 11px; opacity: .6; }
+        .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 14px 0 10px; }
+        .tile { background: rgba(127,127,127,.12); border-radius: 14px; padding: 10px 12px; }
+        .tile .v { font-size: 17px; font-weight: 600; }
+        .tile .u { font-size: 12px; opacity: .6; font-weight: 500; }
+        .tile .l { font-size: 11px; opacity: .6; margin-top: 2px; }
+        svg { width: 100%; height: auto; display: block; touch-action: pan-y; color: var(--primary-text-color); }
+        .axis { font-size: 10px; fill: var(--secondary-text-color); }
+        .info { font-size: 12px; min-height: 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 8px; color: var(--secondary-text-color); }
+        .info b { color: var(--primary-text-color); }
+        .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+        .bar { display: inline-block; width: 12px; height: 4px; border-radius: 2px; margin: 0 4px 2px 2px; vertical-align: middle; }
+        .warn { font-size: 12px; color: var(--bp-cheias); margin-top: 6px; }
+        .err { padding: 8px 0; color: var(--error-color, #FF453A); font-size: 13px; }
+      </style>`;
+
+    if (!plan) {
+      this.shadowRoot.innerHTML = `${style}<ha-card><div class="title">${this._esc(this._config.title)}</div><div class="err">Entidade não encontrada: ${this._esc(planId)}</div></ha-card>`;
+      return;
+    }
+
+    const a = plan.attributes || {};
+    const rows = Array.isArray(a.slots) ? a.slots : [];
+    this._rows = rows;
+    const target = this._v("soc_alvo");
+    const charging = target !== null && Number(target) > 0;
+    const winTxt = a.window_start && a.window_end ? `Janela ${this._time(a.window_start)}–${this._time(a.window_end)}` : "";
+    const curtailed = Number(this._v("solar_desperdicado") || 0);
+
+    const tile = (k, label, unit, d = 1) => `
+      <div class="tile"><div class="v">${this._n(this._v(k), d)} <span class="u">${unit}</span></div><div class="l">${label}</div></div>`;
+
+    this.shadowRoot.innerHTML = `${style}
+      <ha-card>
+        <div class="head">
+          <div>
+            <div class="title">${this._esc(this._config.title)}</div>
+            <div class="decision" style="color:${charging ? "var(--bp-soc)" : "inherit"}">${this._esc(plan.state)}</div>
+            <div class="sub">${winTxt}</div>
+          </div>
+          <div class="save">
+            <div class="v">${this._n(this._v("poupanca_prevista"), 2)} €</div>
+            <div class="l">poupança prevista</div>
+          </div>
+        </div>
+        <div class="tiles">
+          ${tile("carga_pela_rede", "Carga pela rede", "kWh")}
+          ${tile("custo_previsto", "Custo previsto", "€", 2)}
+          ${tile("soc_no_inicio_da_carga", "SOC início carga", "%", 0)}
+          ${tile("solar_previsto", "Solar previsto", "kWh")}
+          ${tile("consumo_previsto", "Consumo previsto", "kWh")}
+          ${tile("soc_minimo_previsto", "SOC mínimo", "%", 0)}
+        </div>
+        ${rows.length ? this._chart(rows, a.window_start, a.window_end) : `<div class="err">Sem plano disponível</div>`}
+        <div class="info"></div>
+        ${curtailed > 0.05 ? `<div class="warn">Solar desperdiçado previsto: ${this._n(curtailed)} kWh</div>` : ""}
+      </ha-card>`;
+
+    this._select(null);
+    this._bind();
+  }
+}
+
+if (!customElements.get("xbattery-pilot-card")) {
+  customElements.define("xbattery-pilot-card", XBatteryPilotCard);
+  window.customCards = window.customCards || [];
+  window.customCards.push({
+    type: "xbattery-pilot-card",
+    name: "xBattery Pilot",
+    description: "Plano de carga da bateria (xBattery Pilot)",
+    preview: false,
+  });
+  console.info(
+    `%c xBattery Pilot CARD %c v${BP_VERSION} `,
+    "color:#fff;background:#34C759;font-weight:700",
+    "color:#34C759;background:#1c1c1e"
+  );
+}

@@ -1,0 +1,14 @@
+{
+  "domain": "xbattery_pilot",
+  "name": "xBattery Pilot",
+  "after_dependencies": ["forecast_solar"],
+  "codeowners": ["@BTNBx"],
+  "config_flow": true,
+  "dependencies": ["recorder"],
+  "documentation": "https://github.com/BTNBx/xbattery-pilot",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/BTNBx/xbattery-pilot/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

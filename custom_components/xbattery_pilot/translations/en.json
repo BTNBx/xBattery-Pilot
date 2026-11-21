@@ -1,0 +1,48 @@
+{
+  "config": {
+    "abort": {
+      "no_forecast": "Install Forecast.Solar, Solcast or Open-Meteo Solar Forecast first.",
+      "already_configured": "Already configured."
+    },
+    "step": {
+      "user": {
+        "title": "xBattery Pilot",
+        "data": {
+          "soc_sensor": "Battery SOC sensor (%)",
+          "load_sensor": "House load sensor (W)",
+          "forecast_entry": "Solar forecast",
+          "pv_scaling": "Solar correction factor",
+          "capacity_wh": "Battery capacity",
+          "min_soc": "Minimum SOC",
+          "charge_start": "Charge window start",
+          "charge_end": "Charge window end",
+          "charge_power_w": "Grid charge power",
+          "price_vazio": "Off-peak price (vazio)",
+          "price_cheias": "Mid-peak price (cheias)",
+          "price_ponta": "Peak price (ponta)"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "xBattery Pilot",
+        "data": {
+          "soc_sensor": "Battery SOC sensor (%)",
+          "load_sensor": "House load sensor (W)",
+          "forecast_entry": "Solar forecast",
+          "pv_scaling": "Solar correction factor",
+          "capacity_wh": "Battery capacity",
+          "min_soc": "Minimum SOC",
+          "charge_start": "Charge window start",
+          "charge_end": "Charge window end",
+          "charge_power_w": "Grid charge power",
+          "price_vazio": "Off-peak price (vazio)",
+          "price_cheias": "Mid-peak price (cheias)",
+          "price_ponta": "Peak price (ponta)"
+        }
+      }
+    }
+  }
+}
