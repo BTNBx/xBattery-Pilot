@@ -34,16 +34,13 @@ from .const import (
 )
 
 
-def _num(mn: float, mx: float, step: float, unit: str | None = None) -> selector.NumberSelector:
-    return selector.NumberSelector(
-        selector.NumberSelectorConfig(
-            min=mn,
-            max=mx,
-            step=step,
-            unit_of_measurement=unit,
-            mode=selector.NumberSelectorMode.BOX,
-        )
+def _num(mn: float, mx: float, step: float | str, unit: str | None = None) -> selector.NumberSelector:
+    config = selector.NumberSelectorConfig(
+        min=mn, max=mx, step=step, mode=selector.NumberSelectorMode.BOX
     )
+    if unit:
+        config["unit_of_measurement"] = unit
+    return selector.NumberSelector(config)
 
 
 def _forecast_options(hass: HomeAssistant) -> list[selector.SelectOptionDict]:
@@ -73,9 +70,9 @@ def _schema(hass: HomeAssistant, d: dict[str, Any]) -> vol.Schema:
             vol.Required(CONF_CHARGE_START, default=d[CONF_CHARGE_START]): selector.TimeSelector(),
             vol.Required(CONF_CHARGE_END, default=d[CONF_CHARGE_END]): selector.TimeSelector(),
             vol.Required(CONF_CHARGE_POWER, default=d[CONF_CHARGE_POWER]): _num(100, 20000, 50, "W"),
-            vol.Required(CONF_PRICE_VAZIO, default=d[CONF_PRICE_VAZIO]): _num(0, 2, 0.0001, "€/kWh"),
-            vol.Required(CONF_PRICE_CHEIAS, default=d[CONF_PRICE_CHEIAS]): _num(0, 2, 0.0001, "€/kWh"),
-            vol.Required(CONF_PRICE_PONTA, default=d[CONF_PRICE_PONTA]): _num(0, 2, 0.0001, "€/kWh"),
+            vol.Required(CONF_PRICE_VAZIO, default=d[CONF_PRICE_VAZIO]): _num(0, 2, "any", "€/kWh"),
+            vol.Required(CONF_PRICE_CHEIAS, default=d[CONF_PRICE_CHEIAS]): _num(0, 2, "any", "€/kWh"),
+            vol.Required(CONF_PRICE_PONTA, default=d[CONF_PRICE_PONTA]): _num(0, 2, "any", "€/kWh"),
         }
     )
 
@@ -86,9 +83,11 @@ class XBatteryPilotConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if not _forecast_options(self.hass):
             return self.async_abort(reason="no_forecast")
-        await self.async_set_unique_id(DOMAIN)
-        self._abort_if_unique_id_configured()
+        if self._async_current_entries():
+            return self.async_abort(reason="already_configured")
         if user_input is not None:
+            await self.async_set_unique_id(DOMAIN)
+            self._abort_if_unique_id_configured()
             return self.async_create_entry(title="xBattery Pilot", data=user_input)
         return self.async_show_form(step_id="user", data_schema=_schema(self.hass, DEFAULTS))
 
