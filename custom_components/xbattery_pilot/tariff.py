@@ -8,7 +8,9 @@ VAZIO = "vazio"
 CHEIAS = "cheias"
 PONTA = "ponta"
 
+# Fonte: ERSE, "Períodos horários na energia elétrica em Portugal" (secção 3.1)
 # Verão: junho a outubro | Inverno: novembro a maio
+# Sábado: sem ponta (fora de vazio = cheias) | Domingo: vazio todo o dia
 SCHEDULE: dict[str, dict[str, list[tuple[time, str]]]] = {
     "inverno": {
         "uteis": [
@@ -17,13 +19,12 @@ SCHEDULE: dict[str, dict[str, list[tuple[time, str]]]] = {
             (time(18, 30), PONTA),
             (time(21, 30), CHEIAS),
         ],
-        # confirmar sábado
         "sabado": [
             (time(0, 0), VAZIO),
-            (time(9, 30), CHEIAS),
-            (time(13, 0), VAZIO),
-            (time(18, 30), CHEIAS),
-            (time(22, 0), VAZIO),
+            (time(11, 30), CHEIAS),
+            (time(13, 30), VAZIO),
+            (time(18, 0), CHEIAS),
+            (time(23, 0), VAZIO),
         ],
         "domingo": [(time(0, 0), VAZIO)],
     },
@@ -34,13 +35,12 @@ SCHEDULE: dict[str, dict[str, list[tuple[time, str]]]] = {
             (time(10, 30), PONTA),
             (time(15, 30), CHEIAS),
         ],
-        # confirmar sábado
         "sabado": [
             (time(0, 0), VAZIO),
-            (time(9, 0), CHEIAS),
-            (time(14, 0), VAZIO),
-            (time(20, 0), CHEIAS),
-            (time(22, 0), VAZIO),
+            (time(11, 0), CHEIAS),
+            (time(14, 30), VAZIO),
+            (time(19, 30), CHEIAS),
+            (time(23, 0), VAZIO),
         ],
         "domingo": [(time(0, 0), VAZIO)],
     },
