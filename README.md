@@ -9,7 +9,7 @@ It answers one question every night: **how far should the battery be charged fro
 ## Features
 
 - **Consumption forecast** from Home Assistant long-term statistics of your load sensor (weighted average of the last 7 days and of the same weekday 7 and 14 days ago)
-- **Automatic load calibration** — compares real vs. forecast consumption over the last 7 days and corrects the forecast (factor clamped to 0.8–1.3)
+- **Automatic load calibration** - compares real vs. forecast consumption over the last 7 days and corrects the forecast (factor clamped to 0.8–1.3)
 - **Solar forecast** from Forecast.Solar, Solcast or Open-Meteo Solar Forecast (any integration that feeds the Energy dashboard)
 - **SOC simulation** in 30-minute steps with charge/discharge efficiency, minimum SOC and grid-charge power limits
 - **Cost optimisation** — picks the target SOC (5 % steps) that minimises the cost of grid energy across off-peak / mid-peak / peak periods, built for **zero-export** systems (surplus solar is curtailed, not sold)
