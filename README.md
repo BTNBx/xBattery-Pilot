@@ -13,8 +13,8 @@ It answers one question every night: **how far should the battery be charged fro
 - **Solar forecast** from Forecast.Solar, Solcast or Open-Meteo Solar Forecast (any integration that feeds the Energy dashboard)
 - **SOC simulation** in 30-minute steps with charge/discharge efficiency, minimum SOC and grid-charge power limits
 - **Cost optimisation** — picks the target SOC (5 % steps) that minimises the cost of grid energy across off-peak / mid-peak / peak periods, built for **zero-export** systems (surplus solar is curtailed, not sold)
-- **Plain-language reason** for every decision (e.g. *"Evita 3,1 kWh de rede em cheias/ponta"* — avoids 3.1 kWh of grid in mid-peak/peak)
-- **Forecast accuracy tracking** — stores the day-ahead forecast and reports yesterday's solar and consumption deviation
+- **Plain-language reason** for every decision (e.g. *"Evita 3,1 kWh de rede em cheias/ponta"* - avoids 3.1 kWh of grid in mid-peak/peak)
+- **Forecast accuracy tracking** - stores the day-ahead forecast and reports yesterday's solar and consumption deviation
 - **Lovelace card** with the plan chart, tariff strip, target and minimum SOC lines
 
 ## Requirements
