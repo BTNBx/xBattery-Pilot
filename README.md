@@ -122,6 +122,10 @@ Drag across the chart to see solar, consumption, grid, SOC and tariff for each h
 - Configurable tariff schedules in the UI
 - English translation of states and card
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
+
 ## Disclaimer
 
 Use at your own risk. While in read-only mode the integration never writes to the inverter.
