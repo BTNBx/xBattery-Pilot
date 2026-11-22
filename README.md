@@ -4,7 +4,7 @@ A Home Assistant custom integration that plans the overnight grid charge of a ho
 
 It answers one question every night: **how far should the battery be charged from the grid in the cheap window so that tomorrow costs the least?**
 
-> **v0.2 — read-only.** The plan is calculated and exposed as sensors; the inverter is not controlled yet.
+> **v0.2 - read-only.** The plan is calculated and exposed as sensors; the inverter is not controlled yet.
 
 ## Features
 
