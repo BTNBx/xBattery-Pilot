@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.statistics import statistics_during_period
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.loader import async_get_integration
 from homeassistant.util import dt as dt_util
@@ -25,6 +26,7 @@ from .const import (
     CONF_PRICE_CHEIAS,
     CONF_PRICE_PONTA,
     CONF_PRICE_VAZIO,
+    CONF_PV_ENERGY_SENSOR,
     CONF_PV_SCALING,
     CONF_SOC_SENSOR,
     CALIBRATION_DAYS,
@@ -33,12 +35,14 @@ from .const import (
     DOMAIN,
     EFF_CHARGE,
     EFF_DISCHARGE,
+    HISTORY_DAYS,
     LOAD_FACTOR_MAX,
     LOAD_FACTOR_MIN,
+    STORAGE_VERSION,
     TARGET_STEP,
     UPDATE_MINUTES,
 )
-from .planner import Battery, Slot, optimise
+from .planner import Battery, SimResult, Slot, optimise, simulate
 from .tariff import CHEIAS, PONTA, VAZIO, period_at
 
 _LOGGER = logging.getLogger(__name__)
@@ -88,6 +92,39 @@ def _load_factor(hist: dict[HourKey, float], today: Any) -> float:
     return min(max(actual / predicted, LOAD_FACTOR_MIN), LOAD_FACTOR_MAX)
 
 
+def _deviation(pred: float | None, real: float | None) -> int | None:
+    """Desvio da previsão em % do real (negativo = previu a menos)."""
+    if pred is None or real is None or real < 0.1:
+        return None
+    return round((pred - real) / real * 100)
+
+
+def _peak_import_kwh(slots: list[Slot], rows: list[dict[str, Any]], ws: datetime, vazio: float) -> float:
+    return sum(
+        r["grid"] for s, r in zip(slots, rows) if s.start >= ws and s.price > vazio + 1e-9
+    ) / 1000
+
+
+def _reason(
+    best: SimResult,
+    base: SimResult,
+    slots: list[Slot],
+    ws: datetime,
+    vazio: float,
+    grid_kwh: float,
+) -> str:
+    """Explicação curta da decisão."""
+    best_peak = _peak_import_kwh(slots, best.rows, ws, vazio)
+    if best.target_soc:
+        avoided = _peak_import_kwh(slots, base.rows, ws, vazio) - best_peak
+        return f"Evita {avoided:.1f} kWh de rede em cheias/ponta".replace(".", ",")
+    if grid_kwh < 0.05:
+        return "Solar e bateria cobrem o consumo"
+    if best_peak < 0.05:
+        return "A rede necessária é toda em vazio — carregar não compensa"
+    return "Carregar não compensa — o solar previsto enche a bateria"
+
+
 class XBatteryPilotCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Calcula o plano de carga."""
 
@@ -100,6 +137,10 @@ class XBatteryPilotCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             update_interval=timedelta(minutes=UPDATE_MINUTES),
         )
         self.entry = entry
+        self._store: Store[dict[str, Any]] = Store(
+            hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}.previsoes"
+        )
+        self._pred: dict[str, dict[str, float]] | None = None
 
     @property
     def cfg(self) -> dict[str, Any]:
@@ -164,6 +205,62 @@ class XBatteryPilotCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             raise UpdateFailed(f"Sem estatísticas para {sid}")
         return out
 
+    async def _pv_actual_kwh(self, cfg: dict[str, Any], day: date) -> float | None:
+        sid = cfg.get(CONF_PV_ENERGY_SENSOR)
+        if not sid:
+            return None
+        start = dt_util.start_of_local_day(day)
+        end = start + timedelta(days=1)
+        stats = await get_instance(self.hass).async_add_executor_job(
+            statistics_during_period,
+            self.hass,
+            start,
+            end,
+            {sid},
+            "hour",
+            None,
+            {"change"},
+        )
+        rows = stats.get(sid, [])
+        if not rows:
+            return None
+        return sum(max(float(r.get("change") or 0), 0.0) for r in rows)
+
+    async def _track_accuracy(
+        self,
+        cfg: dict[str, Any],
+        today: date,
+        pv: dict[HourKey, float],
+        scaling: float,
+        load_hist: dict[HourKey, float],
+        load_factor: float,
+    ) -> tuple[int | None, int | None]:
+        """Guarda a previsão de amanhã e compara a de ontem com o real."""
+        if self._pred is None:
+            data = await self._store.async_load()
+            self._pred = (data or {}).get("pred", {})
+
+        tomorrow = today + timedelta(days=1)
+        pv_day = sum(v for (d, _), v in pv.items() if d == tomorrow) * scaling
+        if pv_day > 0:
+            load_day = sum(_forecast_load_at(load_hist, tomorrow, h) for h in range(24)) * load_factor
+            self._pred[tomorrow.isoformat()] = {
+                "pv": round(pv_day / 1000, 3),
+                "load": round(load_day / 1000, 3),
+            }
+        oldest = today - timedelta(days=HISTORY_DAYS)
+        self._pred = {k: v for k, v in self._pred.items() if date.fromisoformat(k) >= oldest}
+        self._store.async_delay_save(lambda: {"pred": self._pred}, 60)
+
+        yesterday = today - timedelta(days=1)
+        pred_y = self._pred.get(yesterday.isoformat())
+        if not pred_y:
+            return None, None
+        hours = [load_hist[(yesterday, h)] for h in range(24) if (yesterday, h) in load_hist]
+        real_load = sum(hours) / 1000 if len(hours) >= 20 else None
+        real_pv = await self._pv_actual_kwh(cfg, yesterday)
+        return _deviation(pred_y["pv"], real_pv), _deviation(pred_y["load"], real_load)
+
     async def _async_update_data(self) -> dict[str, Any]:
         cfg = self.cfg
         now = dt_util.now()
@@ -216,6 +313,12 @@ class XBatteryPilotCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             slots, soc_pct / 100 * bat.capacity_wh, bat, prices[VAZIO], TARGET_STEP
         )
         cap = bat.capacity_wh
+        base = simulate(
+            slots, soc_pct / 100 * bat.capacity_wh, bat, 0, prices[VAZIO], keep_rows=True
+        )
+        acc_pv, acc_load = await self._track_accuracy(
+            cfg, now.date(), pv, scaling, load_hist, load_factor
+        )
 
         def pct(wh: float | None) -> float | None:
             return None if wh is None else round(wh / cap * 100, 1)
@@ -227,6 +330,7 @@ class XBatteryPilotCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             for s, r in zip(slots, best.rows)
             if s.start >= ws
         )
+        grid_kwh = sum(r["grid"] for s, r in zip(slots, best.rows) if s.start >= ws) / 1000
 
         return {
             "decision": f"Carregar até {best.target_soc}%" if best.target_soc else "Sem carga",
@@ -243,5 +347,13 @@ class XBatteryPilotCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "window_start": ws.isoformat(),
             "window_end": we.isoformat(),
             "horizon_end": horizon_end.isoformat(),
+            "grid_forecast": round(grid_kwh, 2),
+            "reason": _reason(best, base, slots, ws, prices[VAZIO], grid_kwh),
+            "acc_pv": acc_pv,
+            "acc_load": acc_load,
+            "min_soc": float(cfg[CONF_MIN_SOC]),
+            "soc_entity": cfg[CONF_SOC_SENSOR],
+            "updated_at": now.isoformat(),
+            "mode": "leitura",
             "rows": best.rows,
         }

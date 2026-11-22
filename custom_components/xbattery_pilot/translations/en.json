@@ -10,6 +10,7 @@
         "data": {
           "soc_sensor": "Battery SOC sensor (%)",
           "load_sensor": "House load sensor (W)",
+          "pv_energy_sensor": "Daily solar production sensor (kWh)",
           "forecast_entry": "Solar forecast",
           "pv_scaling": "Solar correction factor",
           "capacity_wh": "Battery capacity",
@@ -31,6 +32,7 @@
         "data": {
           "soc_sensor": "Battery SOC sensor (%)",
           "load_sensor": "House load sensor (W)",
+          "pv_energy_sensor": "Daily solar production sensor (kWh)",
           "forecast_entry": "Solar forecast",
           "pv_scaling": "Solar correction factor",
           "capacity_wh": "Battery capacity",

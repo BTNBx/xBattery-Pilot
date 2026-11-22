@@ -11,6 +11,7 @@ CONF_CHARGE_START = "charge_start"
 CONF_CHARGE_END = "charge_end"
 CONF_CHARGE_POWER = "charge_power_w"
 CONF_PV_SCALING = "pv_scaling"
+CONF_PV_ENERGY_SENSOR = "pv_energy_sensor"
 CONF_PRICE_VAZIO = "price_vazio"
 CONF_PRICE_CHEIAS = "price_cheias"
 CONF_PRICE_PONTA = "price_ponta"
@@ -18,6 +19,7 @@ CONF_PRICE_PONTA = "price_ponta"
 DEFAULTS = {
     CONF_SOC_SENSOR: "sensor.deye_battery",
     CONF_LOAD_SENSOR: "sensor.deye_load_l1_power",
+    CONF_PV_ENERGY_SENSOR: "sensor.deye_today_production",
     CONF_CAPACITY: 10240,
     CONF_MIN_SOC: 20,
     CONF_CHARGE_START: "04:00:00",
@@ -39,3 +41,5 @@ DEFAULT_LOAD_W = 400
 LOAD_FACTOR_MIN = 0.8
 LOAD_FACTOR_MAX = 1.3
 CALIBRATION_DAYS = 7
+STORAGE_VERSION = 1
+HISTORY_DAYS = 14

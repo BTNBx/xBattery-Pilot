@@ -1,16 +1,18 @@
-const BP_VERSION = "0.1.0";
+const BP_VERSION = "0.2.0";
 
 const BP_KEYS = [
   "plano",
   "soc_alvo",
+  "rede_prevista",
   "carga_pela_rede",
   "custo_previsto",
   "poupanca_prevista",
   "solar_previsto",
   "consumo_previsto",
-  "soc_no_inicio_da_carga",
   "soc_minimo_previsto",
   "solar_desperdicado",
+  "desvio_solar_ontem",
+  "desvio_consumo_ontem",
 ];
 
 const W = 600;
@@ -33,36 +35,52 @@ class XBatteryPilotCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    const sig = BP_KEYS.map((k) => {
-      const st = hass.states[this._e(k)];
-      return st ? `${st.state}@${st.last_updated}` : "-";
-    }).join("|");
+    const plan = hass.states[this._e("plano")];
+    const socId = plan?.attributes?.soc_entity;
+    const ids = BP_KEYS.map((k) => this._e(k));
+    if (socId) ids.push(socId);
+    const sig = ids
+      .map((id) => {
+        const st = hass.states[id];
+        return st ? `${st.state}@${st.last_updated}` : "-";
+      })
+      .join("|");
     if (sig === this._sig) return;
     this._sig = sig;
     this._render();
   }
 
   getCardSize() {
-    return 7;
+    return 8;
   }
 
   getGridOptions() {
-    return { columns: 12, rows: 7, min_columns: 6 };
+    return { columns: 12, rows: 8, min_columns: 6 };
   }
 
   _e(k) {
     return `${this._config.prefix}${k}`;
   }
 
-  _v(k) {
-    const st = this._hass.states[this._e(k)];
+  _st(id) {
+    const st = this._hass.states[id];
     if (!st || ["unknown", "unavailable"].includes(st.state)) return null;
     return st.state;
   }
 
+  _v(k) {
+    return this._st(this._e(k));
+  }
+
   _n(v, d = 1) {
-    if (v === null || v === undefined || isNaN(Number(v))) return "–";
+    if (v === null || v === undefined || v === "" || isNaN(Number(v))) return "–";
     return Number(v).toLocaleString("pt-PT", { minimumFractionDigits: d, maximumFractionDigits: d });
+  }
+
+  _signed(v) {
+    if (v === null || v === undefined || isNaN(Number(v))) return null;
+    const n = Math.round(Number(v));
+    return `${n > 0 ? "+" : n < 0 ? "−" : ""}${Math.abs(n)} %`;
   }
 
   _esc(s) {
@@ -81,7 +99,7 @@ class XBatteryPilotCard extends HTMLElement {
     return rows.map((r) => (r.price === lo ? "vazio" : r.price === hi && prices.length > 2 ? "ponta" : "cheias"));
   }
 
-  _chart(rows, ws, we) {
+  _chart(rows, a, target) {
     const n = rows.length;
     const cw = W - PL - PR;
     const ch = H - PT - PB;
@@ -98,8 +116,8 @@ class XBatteryPilotCard extends HTMLElement {
     const yS = (s) => PT + (1 - s / 100) * ch;
 
     const periods = this._periods(rows);
-    const tStart = new Date(ws).getTime();
-    const tEnd = new Date(we).getTime();
+    const tStart = new Date(a.window_start).getTime();
+    const tEnd = new Date(a.window_end).getTime();
 
     let svg = "";
 
@@ -115,8 +133,13 @@ class XBatteryPilotCard extends HTMLElement {
     if (wi0 >= 0) {
       const wx = PL + wi0 * bw;
       const ww = (wi1 - wi0 + 1) * bw;
-      svg += `<rect x="${wx}" y="${PT}" width="${ww}" height="${ch}" fill="var(--bp-soc)" opacity="0.10" rx="6"/>`;
-      svg += `<text x="${wx + ww / 2}" y="${PT - 5}" class="axis" text-anchor="middle" fill="var(--bp-soc)">carga</text>`;
+      svg += `<rect x="${wx}" y="${PT}" width="${ww}" height="${ch}" fill="var(--bp-window)" opacity="0.10" rx="6"/>`;
+      svg += `<text x="${wx + ww / 2}" y="${PT - 5}" class="axis" text-anchor="middle" fill="var(--bp-window)">carga</text>`;
+      if (target > 0) {
+        const ty = yS(target);
+        svg += `<line x1="${wx}" x2="${wx + ww}" y1="${ty}" y2="${ty}" stroke="var(--bp-soc)" stroke-width="1.5" stroke-dasharray="5 3"/>`;
+        svg += `<text x="${wx + ww / 2}" y="${ty - 4}" class="axis" text-anchor="middle" fill="var(--bp-soc)">alvo ${Math.round(target)}%</text>`;
+      }
     }
 
     [0, 0.5, 1].forEach((f) => {
@@ -127,6 +150,13 @@ class XBatteryPilotCard extends HTMLElement {
     });
     svg += `<text x="${PL - 6}" y="${PT - 5}" class="axis" text-anchor="end">kW</text>`;
     svg += `<text x="${W - PR + 6}" y="${PT - 5}" class="axis">SOC</text>`;
+
+    const minSoc = Number(a.min_soc);
+    if (!isNaN(minSoc) && minSoc > 0) {
+      const my = yS(minSoc);
+      svg += `<line x1="${PL}" x2="${W - PR}" y1="${my}" y2="${my}" stroke="var(--bp-soc)" stroke-width="1" stroke-dasharray="3 4" opacity="0.55"/>`;
+      svg += `<text x="${W - PR + 6}" y="${my + 3}" class="axis" fill="var(--bp-soc)">mín</text>`;
+    }
 
     let pvPath = `M ${x(0)} ${base}`;
     rows.forEach((r, i) => (pvPath += ` L ${x(i)} ${yP(toW(r.pv))}`));
@@ -145,6 +175,9 @@ class XBatteryPilotCard extends HTMLElement {
 
     const socPts = rows.map((r, i) => `${x(i)},${yS(r.soc)}`).join(" ");
     svg += `<polyline points="${socPts}" fill="none" stroke="var(--bp-soc)" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>`;
+
+    svg += `<line x1="${PL}" x2="${PL}" y1="${PT}" y2="${base}" stroke="currentColor" stroke-width="1" opacity="0.35"/>`;
+    svg += `<text x="${PL + 3}" y="${PT + 9}" class="axis">agora</text>`;
 
     rows.forEach((r, i) => {
       svg += `<rect x="${PL + i * bw}" y="${base + 4}" width="${bw + 0.5}" height="5" fill="var(--bp-${periods[i]})"/>`;
@@ -169,9 +202,10 @@ class XBatteryPilotCard extends HTMLElement {
       <span><i class="dot" style="background:var(--bp-load)"></i>Consumo</span>
       <span><i class="dot" style="background:var(--bp-grid)"></i>Rede</span>
       <span><i class="dot" style="background:var(--bp-soc)"></i>SOC</span>
-      <span class="per"><i class="bar" style="background:var(--bp-vazio)"></i>Vazio
-      <i class="bar" style="background:var(--bp-cheias)"></i>Cheias
-      <i class="bar" style="background:var(--bp-ponta)"></i>Ponta</span>`;
+      <span class="sep"></span>
+      <span><i class="sq" style="background:var(--bp-vazio)"></i>Vazio</span>
+      <span><i class="sq" style="background:var(--bp-cheias)"></i>Cheias</span>
+      <span><i class="sq" style="background:var(--bp-ponta)"></i>Ponta</span>`;
   }
 
   _select(i) {
@@ -201,7 +235,7 @@ class XBatteryPilotCard extends HTMLElement {
       <span><i class="dot" style="background:var(--bp-load)"></i>${this._n((r.load * 2) / 1000, 2)} kW</span>
       <span><i class="dot" style="background:var(--bp-grid)"></i>${this._n((r.grid * 2) / 1000, 2)} kW</span>
       <span><i class="dot" style="background:var(--bp-soc)"></i>${this._n(r.soc, 0)}%</span>
-      <span><i class="bar" style="background:var(--bp-${g.periods[i]})"></i>${g.periods[i]} · ${this._n(r.price, 4)} €</span>`;
+      <span><i class="sq" style="background:var(--bp-${g.periods[i]})"></i>${g.periods[i]} · ${this._n(r.price, 4)} €</span>`;
   }
 
   _bind() {
@@ -230,7 +264,8 @@ class XBatteryPilotCard extends HTMLElement {
           --bp-load: #5AC8FA;
           --bp-grid: #FF6B6B;
           --bp-soc: #34C759;
-          --bp-vazio: #34C759;
+          --bp-window: #34C759;
+          --bp-vazio: #3B82F6;
           --bp-cheias: #FF9F0A;
           --bp-ponta: #FF453A;
         }
@@ -238,22 +273,28 @@ class XBatteryPilotCard extends HTMLElement {
         .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
         .title { font-size: 11px; letter-spacing: .04em; font-weight: 700; opacity: .6; }
         .decision { font-size: 24px; font-weight: 700; margin-top: 4px; line-height: 1.15; }
-        .sub { font-size: 13px; opacity: .6; margin-top: 2px; }
+        .reason { font-size: 13px; opacity: .8; margin-top: 4px; line-height: 1.3; }
+        .sub { font-size: 12px; opacity: .55; margin-top: 2px; }
         .save { text-align: right; white-space: nowrap; }
         .save .v { font-size: 22px; font-weight: 700; color: var(--bp-soc); }
         .save .l { font-size: 11px; opacity: .6; }
         .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 14px 0 10px; }
-        .tile { background: rgba(127,127,127,.12); border-radius: 14px; padding: 10px 12px; }
-        .tile .v { font-size: 17px; font-weight: 600; }
+        .tile { background: rgba(127,127,127,.12); border-radius: 14px; padding: 10px 12px; min-width: 0; }
+        .tile .v { font-size: 17px; font-weight: 600; white-space: nowrap; }
         .tile .u { font-size: 12px; opacity: .6; font-weight: 500; }
         .tile .l { font-size: 11px; opacity: .6; margin-top: 2px; }
+        .tile .x { font-size: 10px; opacity: .5; margin-top: 1px; }
         svg { width: 100%; height: auto; display: block; touch-action: pan-y; color: var(--primary-text-color); }
         .axis { font-size: 10px; fill: var(--secondary-text-color); }
         .info { font-size: 12px; min-height: 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 8px; color: var(--secondary-text-color); }
         .info b { color: var(--primary-text-color); }
-        .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
-        .bar { display: inline-block; width: 12px; height: 4px; border-radius: 2px; margin: 0 4px 2px 2px; vertical-align: middle; }
+        .info .sep { width: 1px; height: 12px; background: currentColor; opacity: .25; }
+        .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+        .sq { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
         .warn { font-size: 12px; color: var(--bp-cheias); margin-top: 6px; }
+        .foot { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; color: var(--secondary-text-color); margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(127,127,127,.18); }
+        .good { color: var(--bp-soc); }
+        .bad { color: var(--bp-cheias); }
         .err { padding: 8px 0; color: var(--error-color, #FF453A); font-size: 13px; }
       </style>`;
 
@@ -265,13 +306,26 @@ class XBatteryPilotCard extends HTMLElement {
     const a = plan.attributes || {};
     const rows = Array.isArray(a.slots) ? a.slots : [];
     this._rows = rows;
-    const target = this._v("soc_alvo");
-    const charging = target !== null && Number(target) > 0;
+    const target = Number(this._v("soc_alvo") || 0);
+    const charging = target > 0;
+    const savings = Number(this._v("poupanca_prevista") || 0);
     const winTxt = a.window_start && a.window_end ? `Janela ${this._time(a.window_start)}–${this._time(a.window_end)}` : "";
     const curtailed = Number(this._v("solar_desperdicado") || 0);
+    const socNow = a.soc_entity ? this._st(a.soc_entity) : null;
+    const gridCharge = Number(this._v("carga_pela_rede") || 0);
 
-    const tile = (k, label, unit, d = 1) => `
-      <div class="tile"><div class="v">${this._n(this._v(k), d)} <span class="u">${unit}</span></div><div class="l">${label}</div></div>`;
+    const tile = (val, label, unit, d, extra = "") => `
+      <div class="tile"><div class="v">${this._n(val, d)} <span class="u">${unit}</span></div><div class="l">${label}</div>${extra ? `<div class="x">${extra}</div>` : ""}</div>`;
+
+    const accCls = (v) => (v === null ? "" : Math.abs(Number(v)) <= 10 ? "good" : "bad");
+    const accPv = this._v("desvio_solar_ontem");
+    const accLoad = this._v("desvio_consumo_ontem");
+    const accTxt =
+      accPv === null && accLoad === null
+        ? "Precisão de ontem: a recolher dados"
+        : `Ontem: solar <span class="${accCls(accPv)}">${this._signed(accPv) ?? "–"}</span> · consumo <span class="${accCls(accLoad)}">${this._signed(accLoad) ?? "–"}</span>`;
+    const updTxt = a.updated_at ? `Atualizado ${this._time(a.updated_at)}` : "";
+    const modeTxt = a.mode === "controlo" ? "a controlar" : "só leitura";
 
     this.shadowRoot.innerHTML = `${style}
       <ha-card>
@@ -279,24 +333,27 @@ class XBatteryPilotCard extends HTMLElement {
           <div>
             <div class="title">${this._esc(this._config.title)}</div>
             <div class="decision" style="color:${charging ? "var(--bp-soc)" : "inherit"}">${this._esc(plan.state)}</div>
+            ${a.reason ? `<div class="reason">${this._esc(a.reason)}</div>` : ""}
             <div class="sub">${winTxt}</div>
           </div>
-          <div class="save">
-            <div class="v">${this._n(this._v("poupanca_prevista"), 2)} €</div>
-            <div class="l">poupança prevista</div>
-          </div>
+          ${
+            savings > 0
+              ? `<div class="save"><div class="v">${this._n(savings, 2)} €</div><div class="l">poupança prevista</div></div>`
+              : ""
+          }
         </div>
         <div class="tiles">
-          ${tile("carga_pela_rede", "Carga pela rede", "kWh")}
-          ${tile("custo_previsto", "Custo previsto", "€", 2)}
-          ${tile("soc_no_inicio_da_carga", "SOC início carga", "%", 0)}
-          ${tile("solar_previsto", "Solar previsto", "kWh")}
-          ${tile("consumo_previsto", "Consumo previsto", "kWh")}
-          ${tile("soc_minimo_previsto", "SOC mínimo", "%", 0)}
+          ${tile(this._v("rede_prevista"), "Rede prevista", "kWh", 1, gridCharge > 0 ? `inclui ${this._n(gridCharge)} kWh de carga` : "")}
+          ${tile(this._v("custo_previsto"), "Custo previsto", "€", 2)}
+          ${tile(socNow, "SOC atual", "%", 0)}
+          ${tile(this._v("solar_previsto"), "Solar previsto", "kWh", 1)}
+          ${tile(this._v("consumo_previsto"), "Consumo previsto", "kWh", 1)}
+          ${tile(this._v("soc_minimo_previsto"), "SOC mínimo", "%", 0)}
         </div>
-        ${rows.length ? this._chart(rows, a.window_start, a.window_end) : `<div class="err">Sem plano disponível</div>`}
+        ${rows.length ? this._chart(rows, a, target) : `<div class="err">Sem plano disponível</div>`}
         <div class="info"></div>
         ${curtailed > 0.05 ? `<div class="warn">Solar desperdiçado previsto: ${this._n(curtailed)} kWh</div>` : ""}
+        <div class="foot"><span>${accTxt}</span><span>${updTxt} · ${modeTxt}</span></div>
       </ha-card>`;
 
     this._select(null);

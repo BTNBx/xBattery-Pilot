@@ -26,6 +26,7 @@ from .const import (
     CONF_PRICE_CHEIAS,
     CONF_PRICE_PONTA,
     CONF_PRICE_VAZIO,
+    CONF_PV_ENERGY_SENSOR,
     CONF_PV_SCALING,
     CONF_SOC_SENSOR,
     DEFAULTS,
@@ -61,6 +62,7 @@ def _schema(hass: HomeAssistant, d: dict[str, Any]) -> vol.Schema:
         {
             vol.Required(CONF_SOC_SENSOR, default=d[CONF_SOC_SENSOR]): sensor_sel,
             vol.Required(CONF_LOAD_SENSOR, default=d[CONF_LOAD_SENSOR]): sensor_sel,
+            vol.Required(CONF_PV_ENERGY_SENSOR, default=d[CONF_PV_ENERGY_SENSOR]): sensor_sel,
             vol.Required(CONF_FORECAST_ENTRY, default=forecast_default): selector.SelectSelector(
                 selector.SelectSelectorConfig(options=options)
             ),
