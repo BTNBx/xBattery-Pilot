@@ -17,7 +17,7 @@ SCHEDULE: dict[str, dict[str, list[tuple[time, str]]]] = {
             (time(18, 30), PONTA),
             (time(21, 30), CHEIAS),
         ],
-        # confirmar sábado/domingo
+        # confirmar sábado
         "sabado": [
             (time(0, 0), VAZIO),
             (time(9, 30), CHEIAS),
@@ -34,7 +34,7 @@ SCHEDULE: dict[str, dict[str, list[tuple[time, str]]]] = {
             (time(10, 30), PONTA),
             (time(15, 30), CHEIAS),
         ],
-        # confirmar sábado/domingo
+        # confirmar sábado
         "sabado": [
             (time(0, 0), VAZIO),
             (time(9, 0), CHEIAS),

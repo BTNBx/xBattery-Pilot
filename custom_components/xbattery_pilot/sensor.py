@@ -38,6 +38,7 @@ SENSORS: tuple[PlannerSensorDescription, ...] = (
             "window_start": d["window_start"],
             "window_end": d["window_end"],
             "horizon_end": d["horizon_end"],
+            "load_factor": d["load_factor"],
             "slots": d["rows"],
         },
     ),

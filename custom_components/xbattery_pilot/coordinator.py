@@ -27,11 +27,14 @@ from .const import (
     CONF_PRICE_VAZIO,
     CONF_PV_SCALING,
     CONF_SOC_SENSOR,
+    CALIBRATION_DAYS,
     DEFAULT_LOAD_W,
     DEFAULTS,
     DOMAIN,
     EFF_CHARGE,
     EFF_DISCHARGE,
+    LOAD_FACTOR_MAX,
+    LOAD_FACTOR_MIN,
     TARGET_STEP,
     UPDATE_MINUTES,
 )
@@ -51,7 +54,11 @@ def _parse_time(value: str) -> time:
 
 def _forecast_load(hist: dict[HourKey, float], t: datetime) -> float:
     """Consumo médio previsto (W) para a hora de t."""
-    d, h = t.date(), t.hour
+    return _forecast_load_at(hist, t.date(), t.hour)
+
+
+def _forecast_load_at(hist: dict[HourKey, float], d: Any, h: int) -> float:
+    """Consumo médio previsto (W) para o dia d, hora h (só usa dias anteriores)."""
     recent = [
         hist[k] for i in range(1, 8) if (k := (d - timedelta(days=i), h)) in hist
     ]
@@ -65,6 +72,20 @@ def _forecast_load(hist: dict[HourKey, float], t: datetime) -> float:
     if not parts:
         return DEFAULT_LOAD_W
     return max(0.0, sum(v * w for v, w in parts) / sum(w for _, w in parts))
+
+
+def _load_factor(hist: dict[HourKey, float], today: Any) -> float:
+    """Fator de correção: consumo real / previsto nos últimos dias completos."""
+    actual = predicted = 0.0
+    for i in range(1, CALIBRATION_DAYS + 1):
+        d = today - timedelta(days=i)
+        for h in range(24):
+            if (d, h) in hist:
+                actual += hist[(d, h)]
+                predicted += _forecast_load_at(hist, d, h)
+    if actual <= 0 or predicted <= 0:
+        return 1.0
+    return min(max(actual / predicted, LOAD_FACTOR_MIN), LOAD_FACTOR_MAX)
 
 
 class XBatteryPilotCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -120,7 +141,7 @@ class XBatteryPilotCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _load_history(self, cfg: dict[str, Any], now: datetime) -> dict[HourKey, float]:
         sid = cfg[CONF_LOAD_SENSOR]
-        start = dt_util.start_of_local_day(now) - timedelta(days=15)
+        start = dt_util.start_of_local_day(now) - timedelta(days=CALIBRATION_DAYS + 15)
         stats = await get_instance(self.hass).async_add_executor_job(
             statistics_during_period,
             self.hass,
@@ -164,6 +185,7 @@ class XBatteryPilotCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             PONTA: float(cfg[CONF_PRICE_PONTA]),
         }
         scaling = float(cfg[CONF_PV_SCALING])
+        load_factor = _load_factor(load_hist, now.date())
 
         slots: list[Slot] = []
         t = now.replace(minute=(now.minute // 30) * 30, second=0, microsecond=0)
@@ -176,7 +198,7 @@ class XBatteryPilotCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         start=t,
                         hours=hours,
                         pv_wh=pv.get((t.date(), t.hour), 0.0) * hours * scaling,
-                        load_wh=_forecast_load(load_hist, t) * hours,
+                        load_wh=_forecast_load(load_hist, t) * load_factor * hours,
                         price=prices[period_at(t)],
                         in_window=ws <= t < we,
                     )
@@ -198,14 +220,23 @@ class XBatteryPilotCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         def pct(wh: float | None) -> float | None:
             return None if wh is None else round(wh / cap * 100, 1)
 
+        # Métricas apresentadas: da próxima janela de carga até à seguinte (24 h fixas)
+        plan_slots = [s for s in slots if s.start >= ws]
+        plan_cost = sum(
+            r["grid"] / 1000 * s.price
+            for s, r in zip(slots, best.rows)
+            if s.start >= ws
+        )
+
         return {
             "decision": f"Carregar até {best.target_soc}%" if best.target_soc else "Sem carga",
             "target_soc": best.target_soc,
             "grid_charge": round(best.charge_wh / 1000, 2),
-            "cost": round(best.import_cost, 2),
+            "cost": round(plan_cost, 2),
             "savings": round(max(base.score - best.score, 0.0), 2),
-            "pv_forecast": round(sum(s.pv_wh for s in slots) / 1000, 2),
-            "load_forecast": round(sum(s.load_wh for s in slots) / 1000, 2),
+            "pv_forecast": round(sum(s.pv_wh for s in plan_slots) / 1000, 2),
+            "load_forecast": round(sum(s.load_wh for s in plan_slots) / 1000, 2),
+            "load_factor": round(load_factor, 3),
             "soc_window_start": pct(best.soc_window_start_wh),
             "soc_min": pct(best.soc_min_wh),
             "curtailed": round(best.curtailed_wh / 1000, 2),
