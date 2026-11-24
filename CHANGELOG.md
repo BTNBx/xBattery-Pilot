@@ -6,8 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-23
+
 ### Added
 - English README and this changelog.
+- Card: battery icon with the current SOC in the header; icons on every tile.
+- Card: "SOC at window start" tile (e.g. *SOC às 04:00*), the figure the decision is based on.
+
+### Changed
+- Card palette aligned with the rest of the dashboard: solar green, grid red, SOC violet, off-peak blue, mid-peak amber, peak rose.
+- Card: solar area drawn with a vertical gradient; solar, consumption and SOC drawn as smoothed curves.
+- Card: legend split into two fixed rows (series / tariffs).
+- Card: charge window is subtle ("janela") when there is no charge and highlighted ("carga → X %") when there is.
+- Card: chart 20 % taller.
 
 ## [0.2.0] - 2026-11-21
 
@@ -52,7 +63,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Sensors for the plan, target SOC, grid charge, forecast cost and savings, solar and consumption forecast, minimum SOC and curtailed solar.
 - Lovelace card `custom:xbattery-pilot-card`.
 
-[Unreleased]: https://github.com/BTNBx/xBattery-Pilot/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/BTNBx/xBattery-Pilot/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/BTNBx/xBattery-Pilot/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/BTNBx/xBattery-Pilot/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/BTNBx/xBattery-Pilot/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/BTNBx/xBattery-Pilot/compare/v0.1.1...v0.1.2
