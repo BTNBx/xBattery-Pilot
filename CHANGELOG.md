@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-27
+
+### Changed
+- **English by default.** Entity names, the plan state, the reason text and the card now follow the Home Assistant language: English, or Portuguese when Home Assistant is set to Portuguese.
+- New installs get English entity IDs (e.g. `sensor.xbattery_pilot_plan`). Existing installs keep their entity IDs, history and dashboards.
+- The plan sensor now carries every plan figure as attributes; the card reads them from there, so it only needs the plan entity.
+- `mode` attribute values are now `read_only` / `control`.
+- Code comments and log messages in English.
+
+### Added
+- Card option `entity` to point at a renamed plan entity.
+
 ## [0.2.2] - 2026-11-27
 
 ### Added
@@ -70,7 +82,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Sensors for the plan, target SOC, grid charge, forecast cost and savings, solar and consumption forecast, minimum SOC and curtailed solar.
 - Lovelace card `custom:xbattery-pilot-card`.
 
-[Unreleased]: https://github.com/BTNBx/xBattery-Pilot/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/BTNBx/xBattery-Pilot/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/BTNBx/xBattery-Pilot/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/BTNBx/xBattery-Pilot/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/BTNBx/xBattery-Pilot/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/BTNBx/xBattery-Pilot/compare/v0.1.3...v0.2.0

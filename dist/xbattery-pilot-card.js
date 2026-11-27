@@ -1,7 +1,88 @@
-const BP_VERSION = "0.2.1";
+const BP_VERSION = "0.3.0";
+
+// Plan entity: English ID (new installs) or Portuguese ID (installs before 0.3.0).
+const BP_PLAN_IDS = ["plan", "plano"];
+
+const BP_I18N = {
+  en: {
+    notFound: "Entity not found",
+    noPlan: "No plan available",
+    window: "Window",
+    savings: "forecast savings",
+    gridForecast: "Grid forecast",
+    includesCharge: "includes {v} kWh of charge",
+    cost: "Cost forecast",
+    socAt: "SOC at {t}",
+    socStart: "SOC at window start",
+    solar: "Solar forecast",
+    load: "Load forecast",
+    minSoc: "Minimum SOC",
+    curtailed: "Forecast curtailed solar",
+    accEmpty: "Yesterday's accuracy: collecting data",
+    accYesterday: "Yesterday: solar {pv} · load {load}",
+    updated: "Updated",
+    control: "controlling",
+    readOnly: "read-only",
+    chargeTo: "charge → {v}%",
+    windowShort: "window",
+    min: "min",
+    now: "now",
+    lSolar: "Solar",
+    lLoad: "Load",
+    lGrid: "Grid",
+    vazio: "Off-peak",
+    cheias: "Mid-peak",
+    ponta: "Peak",
+  },
+  pt: {
+    notFound: "Entidade não encontrada",
+    noPlan: "Sem plano disponível",
+    window: "Janela",
+    savings: "poupança prevista",
+    gridForecast: "Rede prevista",
+    includesCharge: "inclui {v} kWh de carga",
+    cost: "Custo previsto",
+    socAt: "SOC às {t}",
+    socStart: "SOC início carga",
+    solar: "Solar previsto",
+    load: "Consumo previsto",
+    minSoc: "SOC mínimo",
+    curtailed: "Solar desperdiçado previsto",
+    accEmpty: "Precisão de ontem: a recolher dados",
+    accYesterday: "Ontem: solar {pv} · consumo {load}",
+    updated: "Atualizado",
+    control: "a controlar",
+    readOnly: "só leitura",
+    chargeTo: "carga → {v}%",
+    windowShort: "janela",
+    min: "mín",
+    now: "agora",
+    lSolar: "Solar",
+    lLoad: "Consumo",
+    lGrid: "Rede",
+    vazio: "Vazio",
+    cheias: "Cheias",
+    ponta: "Ponta",
+  },
+};
+
+// Values read from the plan attributes (0.3.0+), with fallback to the old sensors.
+const BP_ATTRS = {
+  target_soc: "soc_alvo",
+  grid_forecast: "rede_prevista",
+  grid_charge: "carga_pela_rede",
+  cost: "custo_previsto",
+  savings: "poupanca_prevista",
+  pv_forecast: "solar_previsto",
+  load_forecast: "consumo_previsto",
+  soc_window_start: "soc_no_inicio_da_carga",
+  soc_min: "soc_minimo_previsto",
+  curtailed: "solar_desperdicado",
+  acc_pv: "desvio_solar_ontem",
+  acc_load: "desvio_consumo_ontem",
+};
 
 const BP_KEYS = [
-  "plano",
   "soc_alvo",
   "rede_prevista",
   "carga_pela_rede",
@@ -28,6 +109,36 @@ class XBatteryPilotCard extends HTMLElement {
     return { prefix: "sensor.xbattery_pilot_" };
   }
 
+  _lang() {
+    const l = (this._hass?.locale?.language || this._hass?.language || "en").toLowerCase();
+    return l.startsWith("pt") ? "pt" : "en";
+  }
+
+  _t(k, vars = {}) {
+    const s = (BP_I18N[this._lang()] || BP_I18N.en)[k] ?? BP_I18N.en[k] ?? k;
+    return s.replace(/\{(\w+)\}/g, (_, v) => vars[v] ?? "");
+  }
+
+  _locale() {
+    return this._hass?.locale?.language || this._hass?.language || "en";
+  }
+
+  _planId() {
+    if (this._config.entity) return this._config.entity;
+    for (const k of BP_PLAN_IDS) {
+      const id = this._e(k);
+      if (this._hass?.states[id]) return id;
+    }
+    return this._e(BP_PLAN_IDS[0]);
+  }
+
+  _a(k) {
+    const plan = this._hass.states[this._planId()];
+    const v = plan?.attributes?.[k];
+    if (v !== undefined) return v;
+    return BP_ATTRS[k] ? this._v(BP_ATTRS[k]) : null;
+  }
+
   setConfig(config) {
     this._config = { prefix: "sensor.xbattery_pilot_", title: "xBattery Pilot", ...config };
     this._sig = null;
@@ -36,9 +147,9 @@ class XBatteryPilotCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    const plan = hass.states[this._e("plano")];
+    const plan = hass.states[this._planId()];
     const socId = plan?.attributes?.soc_entity;
-    const ids = BP_KEYS.map((k) => this._e(k));
+    const ids = [this._planId(), ...BP_KEYS.map((k) => this._e(k))];
     if (socId) ids.push(socId);
     const sig = ids
       .map((id) => {
@@ -75,7 +186,7 @@ class XBatteryPilotCard extends HTMLElement {
 
   _n(v, d = 1) {
     if (v === null || v === undefined || v === "" || isNaN(Number(v))) return "–";
-    return Number(v).toLocaleString("pt-PT", { minimumFractionDigits: d, maximumFractionDigits: d });
+    return Number(v).toLocaleString(this._locale(), { minimumFractionDigits: d, maximumFractionDigits: d });
   }
 
   _signed(v) {
@@ -90,7 +201,7 @@ class XBatteryPilotCard extends HTMLElement {
 
   _time(iso) {
     const tz = this._hass?.config?.time_zone;
-    return new Date(iso).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: tz });
+    return new Date(iso).toLocaleTimeString(this._locale(), { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: tz });
   }
 
   _periods(rows) {
@@ -174,7 +285,7 @@ class XBatteryPilotCard extends HTMLElement {
       const ww = (wi1 - wi0 + 1) * bw;
       const on = target > 0;
       svg += `<rect x="${wx}" y="${PT}" width="${ww}" height="${ch}" fill="${on ? "var(--bp-soc)" : "currentColor"}" opacity="${on ? 0.14 : 0.05}" rx="6"/>`;
-      svg += `<text x="${wx + ww / 2}" y="${PT - 5}" class="axis" text-anchor="middle"${on ? ' fill="var(--bp-soc)"' : ""}>${on ? `carga → ${Math.round(target)}%` : "janela"}</text>`;
+      svg += `<text x="${wx + ww / 2}" y="${PT - 5}" class="axis" text-anchor="middle"${on ? ' fill="var(--bp-soc)"' : ""}>${on ? this._t("chargeTo", { v: Math.round(target) }) : this._t("windowShort")}</text>`;
       if (target > 0) {
         const ty = yS(target);
         svg += `<line x1="${wx}" x2="${wx + ww}" y1="${ty}" y2="${ty}" stroke="var(--bp-soc)" stroke-width="1.5" stroke-dasharray="5 3"/>`;
@@ -194,7 +305,7 @@ class XBatteryPilotCard extends HTMLElement {
     if (!isNaN(minSoc) && minSoc > 0) {
       const my = yS(minSoc);
       svg += `<line x1="${PL}" x2="${W - PR}" y1="${my}" y2="${my}" stroke="var(--bp-soc)" stroke-width="1" stroke-dasharray="3 4" opacity="0.55"/>`;
-      svg += `<text x="${W - PR + 6}" y="${my + 3}" class="axis" fill="var(--bp-soc)">mín</text>`;
+      svg += `<text x="${W - PR + 6}" y="${my + 3}" class="axis" fill="var(--bp-soc)">${this._t("min")}</text>`;
     }
 
     const ma = (k) =>
@@ -222,7 +333,7 @@ class XBatteryPilotCard extends HTMLElement {
     svg += `<path d="${socPath}" fill="none" stroke="var(--bp-soc)" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>`;
 
     svg += `<line x1="${PL}" x2="${PL}" y1="${PT}" y2="${base}" stroke="currentColor" stroke-width="1" opacity="0.35"/>`;
-    svg += `<text x="${PL + 3}" y="${PT + 9}" class="axis">agora</text>`;
+    svg += `<text x="${PL + 3}" y="${PT + 9}" class="axis">${this._t("now")}</text>`;
 
     rows.forEach((r, i) => {
       svg += `<rect x="${PL + i * bw}" y="${base + 4}" width="${bw + 0.5}" height="5" fill="var(--bp-${periods[i]})"/>`;
@@ -244,15 +355,15 @@ class XBatteryPilotCard extends HTMLElement {
   _legend() {
     return `
       <div class="row">
-        <span><i class="dot" style="background:var(--bp-pv)"></i>Solar</span>
-        <span><i class="dot" style="background:var(--bp-load)"></i>Consumo</span>
-        <span><i class="dot" style="background:var(--bp-grid)"></i>Rede</span>
+        <span><i class="dot" style="background:var(--bp-pv)"></i>${this._t("lSolar")}</span>
+        <span><i class="dot" style="background:var(--bp-load)"></i>${this._t("lLoad")}</span>
+        <span><i class="dot" style="background:var(--bp-grid)"></i>${this._t("lGrid")}</span>
         <span><i class="dot" style="background:var(--bp-soc)"></i>SOC</span>
       </div>
       <div class="row">
-        <span><i class="sq" style="background:var(--bp-vazio)"></i>Vazio</span>
-        <span><i class="sq" style="background:var(--bp-cheias)"></i>Cheias</span>
-        <span><i class="sq" style="background:var(--bp-ponta)"></i>Ponta</span>
+        <span><i class="sq" style="background:var(--bp-vazio)"></i>${this._t("vazio")}</span>
+        <span><i class="sq" style="background:var(--bp-cheias)"></i>${this._t("cheias")}</span>
+        <span><i class="sq" style="background:var(--bp-ponta)"></i>${this._t("ponta")}</span>
       </div>`;
   }
 
@@ -284,7 +395,7 @@ class XBatteryPilotCard extends HTMLElement {
       <span><i class="dot" style="background:var(--bp-grid)"></i>${this._n((r.grid * 2) / 1000, 2)} kW</span>
       <span><i class="dot" style="background:var(--bp-soc)"></i>${this._n(r.soc, 0)}%</span>
       </div><div class="row">
-      <span><i class="sq" style="background:var(--bp-${g.periods[i]})"></i>${g.periods[i]} · ${this._n(r.price, 4)} €/kWh</span></div>`;
+      <span><i class="sq" style="background:var(--bp-${g.periods[i]})"></i>${this._t(g.periods[i])} · ${this._n(r.price, 4)} €/kWh</span></div>`;
   }
 
   _bind() {
@@ -303,7 +414,7 @@ class XBatteryPilotCard extends HTMLElement {
 
   _render() {
     if (!this._hass || !this._config) return;
-    const planId = this._e("plano");
+    const planId = this._planId();
     const plan = this._hass.states[planId];
 
     const style = `
@@ -352,20 +463,20 @@ class XBatteryPilotCard extends HTMLElement {
       </style>`;
 
     if (!plan) {
-      this.shadowRoot.innerHTML = `${style}<ha-card><div class="title">${this._esc(this._config.title)}</div><div class="err">Entidade não encontrada: ${this._esc(planId)}</div></ha-card>`;
+      this.shadowRoot.innerHTML = `${style}<ha-card><div class="title">${this._esc(this._config.title)}</div><div class="err">${this._t("notFound")}: ${this._esc(planId)}</div></ha-card>`;
       return;
     }
 
     const a = plan.attributes || {};
     const rows = Array.isArray(a.slots) ? a.slots : [];
     this._rows = rows;
-    const target = Number(this._v("soc_alvo") || 0);
+    const target = Number(this._a("target_soc") || 0);
     const charging = target > 0;
-    const savings = Number(this._v("poupanca_prevista") || 0);
-    const winTxt = a.window_start && a.window_end ? `Janela ${this._time(a.window_start)}–${this._time(a.window_end)}` : "";
-    const curtailed = Number(this._v("solar_desperdicado") || 0);
+    const savings = Number(this._a("savings") || 0);
+    const winTxt = a.window_start && a.window_end ? `${this._t("window")} ${this._time(a.window_start)}–${this._time(a.window_end)}` : "";
+    const curtailed = Number(this._a("curtailed") || 0);
     const socNow = a.soc_entity ? this._st(a.soc_entity) : null;
-    const gridCharge = Number(this._v("carga_pela_rede") || 0);
+    const gridCharge = Number(this._a("grid_charge") || 0);
 
     const tile = (icon, val, label, unit, d, extra = "") => `
       <div class="tile"><div class="v"><ha-icon icon="${icon}"></ha-icon><span>${this._n(val, d)} <span class="u">${unit}</span></span></div><div class="l">${label}</div>${extra ? `<div class="x">${extra}</div>` : ""}</div>`;
@@ -381,14 +492,17 @@ class XBatteryPilotCard extends HTMLElement {
     const winStart = a.window_start ? this._time(a.window_start) : "";
 
     const accCls = (v) => (v === null ? "" : Math.abs(Number(v)) <= 10 ? "good" : "bad");
-    const accPv = this._v("desvio_solar_ontem");
-    const accLoad = this._v("desvio_consumo_ontem");
+    const accPv = this._a("acc_pv");
+    const accLoad = this._a("acc_load");
     const accTxt =
-      accPv === null && accLoad === null
-        ? "Precisão de ontem: a recolher dados"
-        : `Ontem: solar <span class="${accCls(accPv)}">${this._signed(accPv) ?? "–"}</span> · consumo <span class="${accCls(accLoad)}">${this._signed(accLoad) ?? "–"}</span>`;
-    const updTxt = a.updated_at ? `Atualizado ${this._time(a.updated_at)}` : "";
-    const modeTxt = a.mode === "controlo" ? "a controlar" : "só leitura";
+      (accPv === null || accPv === undefined) && (accLoad === null || accLoad === undefined)
+        ? this._t("accEmpty")
+        : this._t("accYesterday", {
+            pv: `<span class="${accCls(accPv ?? null)}">${this._signed(accPv) ?? "–"}</span>`,
+            load: `<span class="${accCls(accLoad ?? null)}">${this._signed(accLoad) ?? "–"}</span>`,
+          });
+    const updTxt = a.updated_at ? `${this._t("updated")} ${this._time(a.updated_at)}` : "";
+    const modeTxt = ["control", "controlo"].includes(a.mode) ? this._t("control") : this._t("readOnly");
 
     this.shadowRoot.innerHTML = `${style}
       <ha-card>
@@ -401,20 +515,20 @@ class XBatteryPilotCard extends HTMLElement {
           </div>
           <div class="side">
             <div class="bat"><ha-icon icon="${batIcon}"></ha-icon><span class="v">${this._n(socNow, 0)}</span><span class="u">%</span></div>
-            ${savings > 0 ? `<div class="save"><div class="v">${this._n(savings, 2)} €</div><div class="l">poupança prevista</div></div>` : ""}
+            ${savings > 0 ? `<div class="save"><div class="v">${this._n(savings, 2)} €</div><div class="l">${this._t("savings")}</div></div>` : ""}
           </div>
         </div>
         <div class="tiles">
-          ${tile("mdi:transmission-tower", this._v("rede_prevista"), "Rede prevista", "kWh", 1, gridCharge > 0 ? `inclui ${this._n(gridCharge)} kWh de carga` : "")}
-          ${tile("mdi:currency-eur", this._v("custo_previsto"), "Custo previsto", "€", 2)}
-          ${tile("mdi:battery-clock-outline", this._v("soc_no_inicio_da_carga"), winStart ? `SOC às ${winStart}` : "SOC início carga", "%", 0)}
-          ${tile("mdi:solar-power-variant", this._v("solar_previsto"), "Solar previsto", "kWh", 1)}
-          ${tile("mdi:home-lightning-bolt-outline", this._v("consumo_previsto"), "Consumo previsto", "kWh", 1)}
-          ${tile("mdi:battery-low", this._v("soc_minimo_previsto"), "SOC mínimo", "%", 0)}
+          ${tile("mdi:transmission-tower", this._a("grid_forecast"), this._t("gridForecast"), "kWh", 1, gridCharge > 0 ? this._t("includesCharge", { v: this._n(gridCharge) }) : "")}
+          ${tile("mdi:currency-eur", this._a("cost"), this._t("cost"), "€", 2)}
+          ${tile("mdi:battery-clock-outline", this._a("soc_window_start"), winStart ? this._t("socAt", { t: winStart }) : this._t("socStart"), "%", 0)}
+          ${tile("mdi:solar-power-variant", this._a("pv_forecast"), this._t("solar"), "kWh", 1)}
+          ${tile("mdi:home-lightning-bolt-outline", this._a("load_forecast"), this._t("load"), "kWh", 1)}
+          ${tile("mdi:battery-low", this._a("soc_min"), this._t("minSoc"), "%", 0)}
         </div>
-        ${rows.length ? this._chart(rows, a, target) : `<div class="err">Sem plano disponível</div>`}
+        ${rows.length ? this._chart(rows, a, target) : `<div class="err">${this._t("noPlan")}</div>`}
         <div class="info"></div>
-        ${curtailed > 0.05 ? `<div class="warn">Solar desperdiçado previsto: ${this._n(curtailed)} kWh</div>` : ""}
+        ${curtailed > 0.05 ? `<div class="warn">${this._t("curtailed")}: ${this._n(curtailed)} kWh</div>` : ""}
         <div class="foot"><span>${accTxt}</span><span>${updTxt} · ${modeTxt}</span></div>
       </ha-card>`;
 
@@ -429,7 +543,7 @@ if (!customElements.get("xbattery-pilot-card")) {
   window.customCards.push({
     type: "xbattery-pilot-card",
     name: "xBattery Pilot",
-    description: "Plano de carga da bateria (xBattery Pilot)",
+    description: "Overnight battery charge plan (xBattery Pilot)",
     preview: false,
   });
   console.info(

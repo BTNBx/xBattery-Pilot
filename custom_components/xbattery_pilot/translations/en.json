@@ -48,5 +48,48 @@
         }
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "plan": {
+        "name": "Plan"
+      },
+      "target_soc": {
+        "name": "Target SOC"
+      },
+      "grid_charge": {
+        "name": "Grid charge"
+      },
+      "grid_forecast": {
+        "name": "Grid forecast"
+      },
+      "solar_error_yesterday": {
+        "name": "Solar forecast error yesterday"
+      },
+      "load_error_yesterday": {
+        "name": "Load forecast error yesterday"
+      },
+      "cost_forecast": {
+        "name": "Cost forecast"
+      },
+      "savings_forecast": {
+        "name": "Savings forecast"
+      },
+      "solar_forecast": {
+        "name": "Solar forecast"
+      },
+      "load_forecast": {
+        "name": "Load forecast"
+      },
+      "soc_at_window_start": {
+        "name": "SOC at window start"
+      },
+      "min_soc_forecast": {
+        "name": "Minimum SOC forecast"
+      },
+      "solar_curtailed": {
+        "name": "Solar curtailed"
+      }
+    }
   }
 }

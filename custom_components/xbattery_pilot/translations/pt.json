@@ -48,5 +48,48 @@
         }
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "plan": {
+        "name": "Plano"
+      },
+      "target_soc": {
+        "name": "SOC alvo"
+      },
+      "grid_charge": {
+        "name": "Carga pela rede"
+      },
+      "grid_forecast": {
+        "name": "Rede prevista"
+      },
+      "solar_error_yesterday": {
+        "name": "Desvio solar ontem"
+      },
+      "load_error_yesterday": {
+        "name": "Desvio consumo ontem"
+      },
+      "cost_forecast": {
+        "name": "Custo previsto"
+      },
+      "savings_forecast": {
+        "name": "Poupança prevista"
+      },
+      "solar_forecast": {
+        "name": "Solar previsto"
+      },
+      "load_forecast": {
+        "name": "Consumo previsto"
+      },
+      "soc_at_window_start": {
+        "name": "SOC no início da carga"
+      },
+      "min_soc_forecast": {
+        "name": "SOC mínimo previsto"
+      },
+      "solar_curtailed": {
+        "name": "Solar desperdiçado"
+      }
+    }
   }
 }

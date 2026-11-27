@@ -1,4 +1,7 @@
-"""Períodos horários EDA — BTN tri-horário, ciclo semanal (Açores)."""
+"""EDA tariff periods — BTN tri-hourly, weekly cycle (Azores, Portugal).
+
+Period names are kept in Portuguese: vazio = off-peak, cheias = mid-peak, ponta = peak.
+"""
 
 from __future__ import annotations
 
@@ -8,9 +11,9 @@ VAZIO = "vazio"
 CHEIAS = "cheias"
 PONTA = "ponta"
 
-# Fonte: ERSE, "Períodos horários na energia elétrica em Portugal" (secção 3.1)
-# Verão: junho a outubro | Inverno: novembro a maio
-# Sábado: sem ponta (fora de vazio = cheias) | Domingo: vazio todo o dia
+# Source: ERSE, "Períodos horários na energia elétrica em Portugal" (section 3.1)
+# Summer ("verao"): June to October | Winter ("inverno"): November to May
+# Saturday: no peak (outside off-peak = mid-peak) | Sunday: off-peak all day
 SCHEDULE: dict[str, dict[str, list[tuple[time, str]]]] = {
     "inverno": {
         "uteis": [
@@ -48,7 +51,7 @@ SCHEDULE: dict[str, dict[str, list[tuple[time, str]]]] = {
 
 
 def period_at(t: datetime) -> str:
-    """Devolve o período tarifário num instante (hora local)."""
+    """Return the tariff period at a given (local) time."""
     season = "verao" if 6 <= t.month <= 10 else "inverno"
     wd = t.weekday()
     day = "uteis" if wd < 5 else ("sabado" if wd == 5 else "domingo")

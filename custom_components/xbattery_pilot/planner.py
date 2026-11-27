@@ -1,4 +1,4 @@
-"""Simulação e otimização da carga noturna."""
+"""Simulation and optimisation of the overnight charge."""
 
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ def simulate(
     terminal_price: float,
     keep_rows: bool = False,
 ) -> SimResult:
-    """Simula o SOC slot a slot para um SOC alvo (0 = sem carga pela rede)."""
+    """Simulate SOC slot by slot for a target SOC (0 = no grid charge)."""
     cap = bat.capacity_wh
     floor = cap * bat.min_soc / 100
     target_wh = cap * target_soc / 100
@@ -134,10 +134,10 @@ def optimise(
     step: int = 5,
     margin_wh: float = 0.0,
 ) -> tuple[SimResult, SimResult]:
-    """Devolve (melhor plano, plano sem carga).
+    """Return (best plan, no-charge plan).
 
-    A escolha do SOC alvo é feita com uma reserva de segurança acima do SOC
-    mínimo (margin_wh); os resultados devolvidos são simulados com o SOC mínimo real.
+    The target SOC is chosen keeping a safety reserve (margin_wh) above the
+    minimum SOC; the returned results are simulated with the real minimum SOC.
     """
     plan_min = min(bat.min_soc + max(margin_wh, 0.0) / bat.capacity_wh * 100, 100.0)
     plan_bat = replace(bat, min_soc=plan_min)

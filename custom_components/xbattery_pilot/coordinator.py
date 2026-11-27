@@ -1,4 +1,4 @@
-"""Coordinator do xBattery Pilot."""
+"""xBattery Pilot coordinator."""
 
 from __future__ import annotations
 
@@ -58,12 +58,12 @@ def _parse_time(value: str) -> time:
 
 
 def _forecast_load(hist: dict[HourKey, float], t: datetime) -> float:
-    """Consumo médio previsto (W) para a hora de t."""
+    """Forecast mean load (W) for the hour of t."""
     return _forecast_load_at(hist, t.date(), t.hour)
 
 
 def _forecast_load_at(hist: dict[HourKey, float], d: Any, h: int) -> float:
-    """Consumo médio previsto (W) para o dia d, hora h (só usa dias anteriores)."""
+    """Forecast mean load (W) for day d, hour h (uses previous days only)."""
     recent = [
         hist[k] for i in range(1, 8) if (k := (d - timedelta(days=i), h)) in hist
     ]
@@ -80,7 +80,7 @@ def _forecast_load_at(hist: dict[HourKey, float], d: Any, h: int) -> float:
 
 
 def _load_factor(hist: dict[HourKey, float], today: Any) -> float:
-    """Fator de correção: consumo real / previsto nos últimos dias completos."""
+    """Correction factor: actual / forecast load over the last complete days."""
     actual = predicted = 0.0
     for i in range(1, CALIBRATION_DAYS + 1):
         d = today - timedelta(days=i)
@@ -94,7 +94,7 @@ def _load_factor(hist: dict[HourKey, float], today: Any) -> float:
 
 
 def _deviation(pred: float | None, real: float | None) -> int | None:
-    """Desvio da previsão em % do real (negativo = previu a menos)."""
+    """Forecast deviation in % of the actual value (negative = under-forecast)."""
     if pred is None or real is None or real < 0.1:
         return None
     return round((pred - real) / real * 100)
@@ -106,12 +106,52 @@ def _peak_import_kwh(slots: list[Slot], rows: list[dict[str, Any]], ws: datetime
     ) / 1000
 
 
-def _decision(best: SimResult) -> str:
+# Text shown in the plan state and reason. Portuguese is used when Home
+# Assistant is set to Portuguese; English otherwise.
+TEXTS: dict[str, dict[str, str]] = {
+    "en": {
+        "no_charge": "No charge",
+        "hold": "Hold {target}%",
+        "charge": "Charge to {target}%",
+        "hold_reason": "Safety reserve — holds the battery at {target}% during the window and runs the house on off-peak grid",
+        "margin_reason": "Safety charge — keeps {margin} kWh of reserve above the minimum",
+        "avoid_reason": "Avoids {kwh} kWh of mid-peak/peak grid",
+        "covered_reason": "Solar and battery cover the load",
+        "offpeak_reason": "All grid needed is off-peak — charging does not pay off",
+        "solar_reason": "Charging does not pay off — forecast solar fills the battery",
+    },
+    "pt": {
+        "no_charge": "Sem carga",
+        "hold": "Manter {target}%",
+        "charge": "Carregar até {target}%",
+        "hold_reason": "Reserva de segurança — segura a bateria em {target}% na janela e usa a rede em vazio",
+        "margin_reason": "Carga de segurança — mantém {margin} kWh de reserva acima do mínimo",
+        "avoid_reason": "Evita {kwh} kWh de rede em cheias/ponta",
+        "covered_reason": "Solar e bateria cobrem o consumo",
+        "offpeak_reason": "A rede necessária é toda em vazio — carregar não compensa",
+        "solar_reason": "Carregar não compensa — o solar previsto enche a bateria",
+    },
+}
+
+
+def _texts(language: str | None) -> tuple[dict[str, str], str]:
+    """Return (texts, decimal separator) for the Home Assistant language."""
+    if (language or "").lower().startswith("pt"):
+        return TEXTS["pt"], ","
+    return TEXTS["en"], "."
+
+
+def _fmt(value: float, sep: str) -> str:
+    return f"{value:.1f}".replace(".", sep)
+
+
+def _decision(best: SimResult, language: str | None = None) -> str:
+    t, _ = _texts(language)
     if not best.target_soc:
-        return "Sem carga"
+        return t["no_charge"]
     if best.charge_wh < 50:
-        return f"Manter {best.target_soc}%"
-    return f"Carregar até {best.target_soc}%"
+        return t["hold"].format(target=best.target_soc)
+    return t["charge"].format(target=best.target_soc)
 
 
 def _reason(
@@ -122,25 +162,27 @@ def _reason(
     vazio: float,
     grid_kwh: float,
     margin_kwh: float = 0.0,
+    language: str | None = None,
 ) -> str:
-    """Explicação curta da decisão."""
+    """Short explanation of the decision."""
+    t, sep = _texts(language)
     best_peak = _peak_import_kwh(slots, best.rows, ws, vazio)
     if best.target_soc:
         avoided = _peak_import_kwh(slots, base.rows, ws, vazio) - best_peak
         if best.charge_wh < 50:
-            return f"Reserva de segurança — segura a bateria em {best.target_soc}% na janela e usa a rede em vazio"
+            return t["hold_reason"].format(target=best.target_soc)
         if avoided < 0.05 and margin_kwh > 0:
-            return f"Carga de segurança — mantém {margin_kwh:.1f} kWh de reserva acima do mínimo".replace(".", ",")
-        return f"Evita {avoided:.1f} kWh de rede em cheias/ponta".replace(".", ",")
+            return t["margin_reason"].format(margin=_fmt(margin_kwh, sep))
+        return t["avoid_reason"].format(kwh=_fmt(avoided, sep))
     if grid_kwh < 0.05:
-        return "Solar e bateria cobrem o consumo"
+        return t["covered_reason"]
     if best_peak < 0.05:
-        return "A rede necessária é toda em vazio — carregar não compensa"
-    return "Carregar não compensa — o solar previsto enche a bateria"
+        return t["offpeak_reason"]
+    return t["solar_reason"]
 
 
 class XBatteryPilotCoordinator(DataUpdateCoordinator[dict[str, Any]]):
-    """Calcula o plano de carga."""
+    """Computes the charge plan."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         super().__init__(
@@ -178,12 +220,12 @@ class XBatteryPilotCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         entry_id = cfg.get(CONF_FORECAST_ENTRY)
         fentry = self.hass.config_entries.async_get_entry(entry_id) if entry_id else None
         if fentry is None:
-            raise UpdateFailed("Integração de previsão solar não encontrada")
+            raise UpdateFailed("Solar forecast integration not found")
         integration = await async_get_integration(self.hass, fentry.domain)
         platform = await integration.async_get_platform("energy")
         data = await platform.async_get_solar_forecast(self.hass, entry_id)
         if not data or not data.get("wh_hours"):
-            raise UpdateFailed("Previsão solar vazia")
+            raise UpdateFailed("Solar forecast is empty")
         out: dict[HourKey, float] = {}
         for ts, wh in data["wh_hours"].items():
             parsed = dt_util.parse_datetime(ts)
@@ -216,7 +258,7 @@ class XBatteryPilotCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if row.get("mean") is not None:
                 out[(st.date(), st.hour)] = max(0.0, float(row["mean"]))
         if not out:
-            raise UpdateFailed(f"Sem estatísticas para {sid}")
+            raise UpdateFailed(f"No statistics for {sid}")
         return out
 
     async def _pv_actual_kwh(self, cfg: dict[str, Any], day: date) -> float | None:
@@ -249,7 +291,7 @@ class XBatteryPilotCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         load_hist: dict[HourKey, float],
         load_factor: float,
     ) -> tuple[int | None, int | None]:
-        """Guarda a previsão de amanhã e compara a de ontem com o real."""
+        """Store tomorrow's forecast and compare yesterday's with the actual values."""
         if self._pred is None:
             data = await self._store.async_load()
             self._pred = (data or {}).get("pred", {})
@@ -283,7 +325,7 @@ class XBatteryPilotCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             soc_pct = float(state.state)  # type: ignore[union-attr]
         except (AttributeError, TypeError, ValueError) as err:
-            raise UpdateFailed(f"SOC indisponível: {cfg[CONF_SOC_SENSOR]}") from err
+            raise UpdateFailed(f"SOC unavailable: {cfg[CONF_SOC_SENSOR]}") from err
 
         ws, we = self._window(now, cfg)
         horizon_end = ws + timedelta(days=1)
@@ -343,7 +385,7 @@ class XBatteryPilotCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         def pct(wh: float | None) -> float | None:
             return None if wh is None else round(wh / cap * 100, 1)
 
-        # Métricas apresentadas: da próxima janela de carga até à seguinte (24 h fixas)
+        # Reported metrics: from the next charge window to the following one (fixed 24 h)
         plan_slots = [s for s in slots if s.start >= ws]
         plan_cost = sum(
             r["grid"] / 1000 * s.price
@@ -353,7 +395,7 @@ class XBatteryPilotCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         grid_kwh = sum(r["grid"] for s, r in zip(slots, best.rows) if s.start >= ws) / 1000
 
         return {
-            "decision": _decision(best),
+            "decision": _decision(best, self.hass.config.language),
             "target_soc": best.target_soc,
             "grid_charge": round(best.charge_wh / 1000, 2),
             "cost": round(plan_cost, 2),
@@ -368,13 +410,15 @@ class XBatteryPilotCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "window_end": we.isoformat(),
             "horizon_end": horizon_end.isoformat(),
             "grid_forecast": round(grid_kwh, 2),
-            "reason": _reason(best, base, slots, ws, prices[VAZIO], grid_kwh, margin_kwh),
+            "reason": _reason(
+                best, base, slots, ws, prices[VAZIO], grid_kwh, margin_kwh, self.hass.config.language
+            ),
             "safety_margin": margin_kwh,
             "acc_pv": acc_pv,
             "acc_load": acc_load,
             "min_soc": float(cfg[CONF_MIN_SOC]),
             "soc_entity": cfg[CONF_SOC_SENSOR],
             "updated_at": now.isoformat(),
-            "mode": "leitura",
+            "mode": "read_only",
             "rows": best.rows,
         }

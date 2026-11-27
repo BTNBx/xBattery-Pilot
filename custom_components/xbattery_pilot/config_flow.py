@@ -1,4 +1,4 @@
-"""Config flow do xBattery Pilot."""
+"""xBattery Pilot config flow."""
 
 from __future__ import annotations
 

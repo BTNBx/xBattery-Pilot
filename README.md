@@ -70,21 +70,23 @@ Other schedules can be set by editing `tariff.py`.
 
 | Entity | Description |
 |---|---|
-| `sensor.xbattery_pilot_plano` | Decision (`Carregar até X%` / `Sem carga`). Attributes: reason, charge window, load factor, minimum SOC, half-hourly plan (`slots`) |
-| `sensor.xbattery_pilot_soc_alvo` | Target SOC (%) — `0` when no charge is needed |
-| `sensor.xbattery_pilot_carga_pela_rede` | Energy charged from the grid (kWh) |
-| `sensor.xbattery_pilot_rede_prevista` | Total grid energy forecast for the next 24 h (kWh) |
-| `sensor.xbattery_pilot_custo_previsto` | Forecast grid cost for the next 24 h (€) |
-| `sensor.xbattery_pilot_poupanca_prevista` | Savings vs. not charging (€) |
-| `sensor.xbattery_pilot_solar_previsto` | Solar forecast for the next 24 h (kWh) |
-| `sensor.xbattery_pilot_consumo_previsto` | Consumption forecast for the next 24 h (kWh) |
-| `sensor.xbattery_pilot_soc_no_inicio_da_carga` | Forecast SOC when the charge window opens (%) |
-| `sensor.xbattery_pilot_soc_minimo_previsto` | Lowest forecast SOC (%) |
-| `sensor.xbattery_pilot_solar_desperdicado` | Solar that would be curtailed (kWh) |
-| `sensor.xbattery_pilot_desvio_solar_ontem` | Yesterday's solar forecast deviation (%) |
-| `sensor.xbattery_pilot_desvio_consumo_ontem` | Yesterday's consumption forecast deviation (%) |
+| `sensor.xbattery_pilot_plan` | Decision (`Charge to X%` / `Hold X%` / `No charge`). Attributes: reason, charge window, load factor, minimum SOC, safety margin, all plan figures and the half-hourly plan (`slots`) |
+| `sensor.xbattery_pilot_target_soc` | Target SOC (%) — `0` when no charge is needed |
+| `sensor.xbattery_pilot_grid_charge` | Energy charged from the grid (kWh) |
+| `sensor.xbattery_pilot_grid_forecast` | Total grid energy forecast for the next 24 h (kWh) |
+| `sensor.xbattery_pilot_cost_forecast` | Forecast grid cost for the next 24 h (€) |
+| `sensor.xbattery_pilot_savings_forecast` | Savings vs. not charging (€) |
+| `sensor.xbattery_pilot_solar_forecast` | Solar forecast for the next 24 h (kWh) |
+| `sensor.xbattery_pilot_load_forecast` | Consumption forecast for the next 24 h (kWh) |
+| `sensor.xbattery_pilot_soc_at_window_start` | Forecast SOC when the charge window opens (%) |
+| `sensor.xbattery_pilot_min_soc_forecast` | Lowest forecast SOC (%) |
+| `sensor.xbattery_pilot_solar_curtailed` | Solar that would be curtailed (kWh) |
+| `sensor.xbattery_pilot_solar_error_yesterday` | Yesterday's solar forecast deviation (%) |
+| `sensor.xbattery_pilot_load_error_yesterday` | Yesterday's consumption forecast deviation (%) |
 
-Entity names, states and the card are currently in Portuguese; an English translation is planned.
+Entity names, the plan state, the reason and the card follow the Home Assistant language: **English** by default, **Portuguese** when Home Assistant is set to Portuguese.
+
+> Installs from before 0.3.0 keep their original (Portuguese) entity IDs, e.g. `sensor.xbattery_pilot_plano`. Nothing needs to change — the card finds either.
 
 The 24 h figures always cover one charge window to the next (e.g. 04:00 → 04:00). The plan is recalculated every 15 minutes.
 
@@ -104,6 +106,7 @@ type: custom:xbattery-pilot-card
 | Option | Default | Description |
 |---|---|---|
 | `prefix` | `sensor.xbattery_pilot_` | Entity prefix |
+| `entity` | — | Plan entity, if it was renamed (e.g. `sensor.my_plan`) |
 | `title` | `xBattery Pilot` | Card title |
 
 Drag across the chart to see solar, consumption, grid, SOC and tariff for each half hour.
@@ -121,7 +124,6 @@ Drag across the chart to see solar, consumption, grid, SOC and tariff for each h
 - Peak shaving awareness
 - Flexible loads (e.g. dehumidifiers) on solar surplus
 - Configurable tariff schedules in the UI
-- English translation of states and card
 
 ## Changelog
 

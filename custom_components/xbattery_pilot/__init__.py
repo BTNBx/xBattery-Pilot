@@ -1,4 +1,4 @@
-"""xBattery Pilot — carga noturna da bateria por previsão solar e consumo."""
+"""xBattery Pilot — overnight battery charge planning from solar and load forecasts."""
 
 from __future__ import annotations
 

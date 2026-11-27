@@ -1,4 +1,4 @@
-"""Sensores do xBattery Pilot."""
+"""xBattery Pilot sensors."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ class PlannerSensorDescription(SensorEntityDescription):
 SENSORS: tuple[PlannerSensorDescription, ...] = (
     PlannerSensorDescription(
         key="plano",
-        name="Plano",
+        translation_key="plan",
         icon="mdi:battery-clock",
         value_fn=lambda d: d["decision"],
         attr_fn=lambda d: {
@@ -45,19 +45,31 @@ SENSORS: tuple[PlannerSensorDescription, ...] = (
             "soc_entity": d["soc_entity"],
             "updated_at": d["updated_at"],
             "mode": d["mode"],
+            "target_soc": d["target_soc"],
+            "grid_charge": d["grid_charge"],
+            "grid_forecast": d["grid_forecast"],
+            "cost": d["cost"],
+            "savings": d["savings"],
+            "pv_forecast": d["pv_forecast"],
+            "load_forecast": d["load_forecast"],
+            "soc_window_start": d["soc_window_start"],
+            "soc_min": d["soc_min"],
+            "curtailed": d["curtailed"],
+            "acc_pv": d["acc_pv"],
+            "acc_load": d["acc_load"],
             "slots": d["rows"],
         },
     ),
     PlannerSensorDescription(
         key="soc_alvo",
-        name="SOC alvo",
+        translation_key="target_soc",
         icon="mdi:battery-charging-high",
         native_unit_of_measurement=PERCENTAGE,
         value_fn=lambda d: d["target_soc"],
     ),
     PlannerSensorDescription(
         key="carga_rede",
-        name="Carga pela rede",
+        translation_key="grid_charge",
         icon="mdi:transmission-tower-import",
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
@@ -65,7 +77,7 @@ SENSORS: tuple[PlannerSensorDescription, ...] = (
     ),
     PlannerSensorDescription(
         key="rede_prevista",
-        name="Rede prevista",
+        translation_key="grid_forecast",
         icon="mdi:transmission-tower",
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
@@ -73,28 +85,28 @@ SENSORS: tuple[PlannerSensorDescription, ...] = (
     ),
     PlannerSensorDescription(
         key="desvio_solar_ontem",
-        name="Desvio solar ontem",
+        translation_key="solar_error_yesterday",
         icon="mdi:solar-power-variant",
         native_unit_of_measurement=PERCENTAGE,
         value_fn=lambda d: d["acc_pv"],
     ),
     PlannerSensorDescription(
         key="desvio_consumo_ontem",
-        name="Desvio consumo ontem",
+        translation_key="load_error_yesterday",
         icon="mdi:home-lightning-bolt-outline",
         native_unit_of_measurement=PERCENTAGE,
         value_fn=lambda d: d["acc_load"],
     ),
     PlannerSensorDescription(
         key="custo_previsto",
-        name="Custo previsto",
+        translation_key="cost_forecast",
         device_class=SensorDeviceClass.MONETARY,
         native_unit_of_measurement="EUR",
         value_fn=lambda d: d["cost"],
     ),
     PlannerSensorDescription(
         key="poupanca_prevista",
-        name="Poupança prevista",
+        translation_key="savings_forecast",
         icon="mdi:piggy-bank-outline",
         device_class=SensorDeviceClass.MONETARY,
         native_unit_of_measurement="EUR",
@@ -102,7 +114,7 @@ SENSORS: tuple[PlannerSensorDescription, ...] = (
     ),
     PlannerSensorDescription(
         key="solar_previsto",
-        name="Solar previsto",
+        translation_key="solar_forecast",
         icon="mdi:solar-power-variant",
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
@@ -110,7 +122,7 @@ SENSORS: tuple[PlannerSensorDescription, ...] = (
     ),
     PlannerSensorDescription(
         key="consumo_previsto",
-        name="Consumo previsto",
+        translation_key="load_forecast",
         icon="mdi:home-lightning-bolt-outline",
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
@@ -118,21 +130,21 @@ SENSORS: tuple[PlannerSensorDescription, ...] = (
     ),
     PlannerSensorDescription(
         key="soc_inicio_carga",
-        name="SOC no início da carga",
+        translation_key="soc_at_window_start",
         icon="mdi:battery-arrow-down-outline",
         native_unit_of_measurement=PERCENTAGE,
         value_fn=lambda d: d["soc_window_start"],
     ),
     PlannerSensorDescription(
         key="soc_minimo_previsto",
-        name="SOC mínimo previsto",
+        translation_key="min_soc_forecast",
         icon="mdi:battery-low",
         native_unit_of_measurement=PERCENTAGE,
         value_fn=lambda d: d["soc_min"],
     ),
     PlannerSensorDescription(
         key="solar_desperdicado",
-        name="Solar desperdiçado",
+        translation_key="solar_curtailed",
         icon="mdi:solar-power-variant-outline",
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
@@ -163,7 +175,10 @@ class PlannerSensor(CoordinatorEntity[XBatteryPilotCoordinator], SensorEntity):
     ) -> None:
         super().__init__(coordinator)
         self.entity_description = description
+        # Unique IDs keep the original (Portuguese) keys so existing installs are not
+        # affected; new installs get English entity IDs.
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        self.entity_id = f"sensor.xbattery_pilot_{description.translation_key}"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
             name="xBattery Pilot",

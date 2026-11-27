@@ -1,4 +1,4 @@
-"""Constantes do xBattery Pilot."""
+"""xBattery Pilot constants."""
 
 DOMAIN = "xbattery_pilot"
 
