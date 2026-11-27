@@ -4,7 +4,9 @@ A Home Assistant custom integration that plans the overnight grid charge of a ho
 
 It answers one question every night: **how far should the battery be charged from the grid in the cheap window so that tomorrow costs the least?**
 
-> **v0.2 - read-only.** The plan is calculated and exposed as sensors; the inverter is not controlled yet.
+> **v0.3 - read-only.** The plan is calculated and exposed as sensors; the inverter is not controlled yet.
+>
+> Available in **English** and **Portuguese** (follows the Home Assistant language).
 
 ## Features
 
@@ -13,9 +15,10 @@ It answers one question every night: **how far should the battery be charged fro
 - **Solar forecast** from Forecast.Solar, Solcast or Open-Meteo Solar Forecast (any integration that feeds the Energy dashboard)
 - **SOC simulation** in 30-minute steps with charge/discharge efficiency, minimum SOC and grid-charge power limits
 - **Cost optimisation** - picks the target SOC (5 % steps) that minimises the cost of grid energy across off-peak / mid-peak / peak periods, built for **zero-export** systems (surplus solar is curtailed, not sold)
-- **Plain-language reason** for every decision (e.g. *"Evita 3,1 kWh de rede em cheias/ponta"* - avoids 3.1 kWh of grid in mid-peak/peak)
+- **Safety margin** - keeps an extra reserve (default 1 kWh) above the minimum SOC to absorb forecast errors
+- **Plain-language reason** for every decision (e.g. *"Avoids 3.1 kWh of mid-peak/peak grid"*)
 - **Forecast accuracy tracking** - stores the day-ahead forecast and reports yesterday's solar and consumption deviation
-- **Lovelace card** with the plan chart, tariff strip, target and minimum SOC lines
+- **Lovelace card** with the plan chart, tariff strip, target and minimum SOC lines (English / Portuguese)
 
 ## Requirements
 
@@ -116,7 +119,8 @@ Drag across the chart to see solar, consumption, grid, SOC and tariff for each h
 1. Reads up to 22 days of hourly load statistics and builds an hourly consumption forecast, corrected by the calibration factor.
 2. Reads the hourly solar forecast.
 3. Simulates the battery from now until the window after next, for every target SOC from the minimum to 100 %.
-4. Keeps the cheapest plan; leftover battery energy at the end is credited so the planner does not drain the battery just to look cheaper.
+4. Keeps the cheapest plan while respecting the safety margin; leftover battery energy at the end is credited so the planner does not drain the battery just to look cheaper.
+5. If the battery is already above the chosen target, the plan is **Hold X%**: the battery is kept there during the window and the house runs on off-peak grid.
 
 ## Roadmap
 
