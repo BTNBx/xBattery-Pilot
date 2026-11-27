@@ -41,6 +41,7 @@ SENSORS: tuple[PlannerSensorDescription, ...] = (
             "load_factor": d["load_factor"],
             "reason": d["reason"],
             "min_soc": d["min_soc"],
+            "safety_margin": d.get("safety_margin"),
             "soc_entity": d["soc_entity"],
             "updated_at": d["updated_at"],
             "mode": d["mode"],

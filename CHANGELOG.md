@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 - New option: **safety margin** (kWh, default 1.0). The charge target is chosen keeping this reserve above the minimum SOC, so a cloudier day or a higher load does not push the house onto mid-peak/peak grid. Reported figures still use the real minimum SOC.
 - `safety_margin` plan attribute; reason text for charges made only for the margin.
+- New decision `Manter X%`: when the battery is already above the target, it is held there during the window (house runs on off-peak grid) instead of being drained.
 
 ## [0.2.1] - 2026-11-23
 

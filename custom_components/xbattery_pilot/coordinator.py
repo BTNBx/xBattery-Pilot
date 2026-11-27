@@ -106,6 +106,14 @@ def _peak_import_kwh(slots: list[Slot], rows: list[dict[str, Any]], ws: datetime
     ) / 1000
 
 
+def _decision(best: SimResult) -> str:
+    if not best.target_soc:
+        return "Sem carga"
+    if best.charge_wh < 50:
+        return f"Manter {best.target_soc}%"
+    return f"Carregar até {best.target_soc}%"
+
+
 def _reason(
     best: SimResult,
     base: SimResult,
@@ -119,6 +127,8 @@ def _reason(
     best_peak = _peak_import_kwh(slots, best.rows, ws, vazio)
     if best.target_soc:
         avoided = _peak_import_kwh(slots, base.rows, ws, vazio) - best_peak
+        if best.charge_wh < 50:
+            return f"Reserva de segurança — segura a bateria em {best.target_soc}% na janela e usa a rede em vazio"
         if avoided < 0.05 and margin_kwh > 0:
             return f"Carga de segurança — mantém {margin_kwh:.1f} kWh de reserva acima do mínimo".replace(".", ",")
         return f"Evita {avoided:.1f} kWh de rede em cheias/ponta".replace(".", ",")
@@ -343,7 +353,7 @@ class XBatteryPilotCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         grid_kwh = sum(r["grid"] for s, r in zip(slots, best.rows) if s.start >= ws) / 1000
 
         return {
-            "decision": f"Carregar até {best.target_soc}%" if best.target_soc else "Sem carga",
+            "decision": _decision(best),
             "target_soc": best.target_soc,
             "grid_charge": round(best.charge_wh / 1000, 2),
             "cost": round(plan_cost, 2),
