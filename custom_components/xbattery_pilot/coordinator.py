@@ -28,6 +28,7 @@ from .const import (
     CONF_PRICE_VAZIO,
     CONF_PV_ENERGY_SENSOR,
     CONF_PV_SCALING,
+    CONF_SAFETY_MARGIN,
     CONF_SOC_SENSOR,
     CALIBRATION_DAYS,
     DEFAULT_LOAD_W,
@@ -112,11 +113,14 @@ def _reason(
     ws: datetime,
     vazio: float,
     grid_kwh: float,
+    margin_kwh: float = 0.0,
 ) -> str:
     """Explicação curta da decisão."""
     best_peak = _peak_import_kwh(slots, best.rows, ws, vazio)
     if best.target_soc:
         avoided = _peak_import_kwh(slots, base.rows, ws, vazio) - best_peak
+        if avoided < 0.05 and margin_kwh > 0:
+            return f"Carga de segurança — mantém {margin_kwh:.1f} kWh de reserva acima do mínimo".replace(".", ",")
         return f"Evita {avoided:.1f} kWh de rede em cheias/ponta".replace(".", ",")
     if grid_kwh < 0.05:
         return "Solar e bateria cobrem o consumo"
@@ -309,8 +313,14 @@ class XBatteryPilotCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             eff_charge=EFF_CHARGE,
             eff_discharge=EFF_DISCHARGE,
         )
+        margin_kwh = float(cfg.get(CONF_SAFETY_MARGIN, 0.0) or 0.0)
         best, base = optimise(
-            slots, soc_pct / 100 * bat.capacity_wh, bat, prices[VAZIO], TARGET_STEP
+            slots,
+            soc_pct / 100 * bat.capacity_wh,
+            bat,
+            prices[VAZIO],
+            TARGET_STEP,
+            margin_wh=margin_kwh * 1000,
         )
         cap = bat.capacity_wh
         base = simulate(
@@ -348,7 +358,8 @@ class XBatteryPilotCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "window_end": we.isoformat(),
             "horizon_end": horizon_end.isoformat(),
             "grid_forecast": round(grid_kwh, 2),
-            "reason": _reason(best, base, slots, ws, prices[VAZIO], grid_kwh),
+            "reason": _reason(best, base, slots, ws, prices[VAZIO], grid_kwh, margin_kwh),
+            "safety_margin": margin_kwh,
             "acc_pv": acc_pv,
             "acc_load": acc_load,
             "min_soc": float(cfg[CONF_MIN_SOC]),

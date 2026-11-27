@@ -15,6 +15,7 @@ CONF_PV_ENERGY_SENSOR = "pv_energy_sensor"
 CONF_PRICE_VAZIO = "price_vazio"
 CONF_PRICE_CHEIAS = "price_cheias"
 CONF_PRICE_PONTA = "price_ponta"
+CONF_SAFETY_MARGIN = "safety_margin_kwh"
 
 DEFAULTS = {
     CONF_SOC_SENSOR: "sensor.deye_battery",
@@ -29,6 +30,7 @@ DEFAULTS = {
     CONF_PRICE_VAZIO: 0.1082,
     CONF_PRICE_CHEIAS: 0.1681,
     CONF_PRICE_PONTA: 0.2584,
+    CONF_SAFETY_MARGIN: 1.0,
 }
 
 FORECAST_DOMAINS = ("forecast_solar", "solcast_solar", "open_meteo_solar_forecast")

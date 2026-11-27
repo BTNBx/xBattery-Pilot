@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Any
 
@@ -127,15 +127,26 @@ def simulate(
 
 
 def optimise(
-    slots: list[Slot], soc_wh: float, bat: Battery, terminal_price: float, step: int = 5
+    slots: list[Slot],
+    soc_wh: float,
+    bat: Battery,
+    terminal_price: float,
+    step: int = 5,
+    margin_wh: float = 0.0,
 ) -> tuple[SimResult, SimResult]:
-    """Devolve (melhor plano, plano sem carga)."""
-    base = simulate(slots, soc_wh, bat, 0, terminal_price)
-    best = base
-    start = int(math.ceil(bat.min_soc / step) * step)
+    """Devolve (melhor plano, plano sem carga).
+
+    A escolha do SOC alvo é feita com uma reserva de segurança acima do SOC
+    mínimo (margin_wh); os resultados devolvidos são simulados com o SOC mínimo real.
+    """
+    plan_min = min(bat.min_soc + max(margin_wh, 0.0) / bat.capacity_wh * 100, 100.0)
+    plan_bat = replace(bat, min_soc=plan_min)
+    best = simulate(slots, soc_wh, plan_bat, 0, terminal_price)
+    start = int(math.ceil(plan_min / step) * step)
     for target in range(start, 101, step):
-        res = simulate(slots, soc_wh, bat, target, terminal_price)
+        res = simulate(slots, soc_wh, plan_bat, target, terminal_price)
         if res.score < best.score - 0.005:
             best = res
+    base = simulate(slots, soc_wh, bat, 0, terminal_price)
     best = simulate(slots, soc_wh, bat, best.target_soc, terminal_price, keep_rows=True)
     return best, base

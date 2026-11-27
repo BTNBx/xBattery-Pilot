@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-11-27
+
+### Added
+- New option: **safety margin** (kWh, default 1.0). The charge target is chosen keeping this reserve above the minimum SOC, so a cloudier day or a higher load does not push the house onto mid-peak/peak grid. Reported figures still use the real minimum SOC.
+- `safety_margin` plan attribute; reason text for charges made only for the margin.
+
 ## [0.2.1] - 2026-11-23
 
 ### Added
@@ -63,7 +69,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Sensors for the plan, target SOC, grid charge, forecast cost and savings, solar and consumption forecast, minimum SOC and curtailed solar.
 - Lovelace card `custom:xbattery-pilot-card`.
 
-[Unreleased]: https://github.com/BTNBx/xBattery-Pilot/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/BTNBx/xBattery-Pilot/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/BTNBx/xBattery-Pilot/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/BTNBx/xBattery-Pilot/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/BTNBx/xBattery-Pilot/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/BTNBx/xBattery-Pilot/compare/v0.1.2...v0.1.3

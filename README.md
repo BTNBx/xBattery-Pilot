@@ -49,6 +49,7 @@ All options are set in the UI and can be changed later under **Configure**.
 | Solar correction factor | `1.0` | Scales the solar forecast up or down |
 | Battery capacity | `10240` Wh | Usable capacity |
 | Minimum SOC | `20` % | The battery is never planned below this |
+| Safety margin | `1.0` kWh | Extra reserve kept above the minimum SOC when choosing the charge target, to absorb forecast errors (0 = off) |
 | Charge window start / end | `04:00` / `08:00` | When grid charging is allowed |
 | Grid charge power | `2000` W | Maximum charge power from the grid |
 | Off-peak / mid-peak / peak price | `0.1082` / `0.1681` / `0.2584` €/kWh | Energy prices per period |
